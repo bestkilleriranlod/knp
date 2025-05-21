@@ -1,0 +1,12 @@
+frontend
+knp_manager_bot
+node_modules
+readme
+secondary_backend
+teritary_backend
+.git
+.gitignore
+commands.sh
+README.md
+amnezia_wrapper
+wireguard_wrapper

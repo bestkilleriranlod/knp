@@ -1,0 +1,19 @@
+{
+    "email": {
+        "disabled": true,
+        "sender": {
+            "service": "Gmail",
+            "auth": {
+                "user": "backup@gmail.com",
+                "pass": "12345"
+            }
+        },
+        "receiver": []
+    },
+    "telegram": {
+        "disabled": false,
+        "bot_token": "6552201638:AAEas5y5MV1x-npjMWPJsN06BNzxwSukhAc",
+        "chat_id": "95945429"
+    },
+    "interval": 14400
+}

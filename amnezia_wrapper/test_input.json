@@ -1,0 +1,7 @@
+{
+    "config_version": 1,
+    "api_endpoint": "https://lodgamer.com/sub",
+    "protocol": "awg",
+    "name": "EB_Pooya",
+    "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6IkVCX1Bvb3lhIiwiaWF0IjoxNzMzODI1NDE5fQ.P9bIyGGFGaOqiJWNNotXe06MLckI94cA2Abui5s2glE"
+}
