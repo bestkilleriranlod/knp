@@ -11,9 +11,9 @@
         "receiver": []
     },
     "telegram": {
-        "disabled": false,
-        "bot_token": "6552201638:AAEas5y5MV1x-npjMWPJsN06BNzxwSukhAc",
-        "chat_id": "95945429"
+        "disabled": true,
+        "bot_token": "",
+        "chat_id": ""
     },
-    "interval": 14400
+    "interval": 1800
 }
