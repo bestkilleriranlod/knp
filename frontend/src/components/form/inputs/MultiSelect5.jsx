@@ -40,7 +40,7 @@ export default function BasicSelect({ onChange, defaultValue, id }) {
                     ))} */}
                     {panels.map((panel) => (
                         <MenuItem key={panel.id} value={panel.panel_country}>
-                            {panel.panel_name} (ظرفیت: {panel.panel_user_max_count - panel.active_users})
+                            {panel.panel_country}
                         </MenuItem>
                     ))}
 

@@ -4,11 +4,9 @@ import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import FormControl from '@mui/material/FormControl'
 import Select from '@mui/material/Select'
-import axios from 'axios'
 
 export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
   const [age, setAge] = useState(defaultValue)
-  const [panels, setPanels] = useState([])
 
   const handleChange = (event) => {
     setAge(event.target.value)
@@ -23,34 +21,6 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
 
   const agent = JSON.parse(sessionStorage.getItem("agent"))
 
-  useEffect(() => {
-    const fetchPanels = async () => {
-      try {
-        const access_token = sessionStorage.getItem("access_token")
-        const response = await axios.post("/get_panels", { access_token })
-        if (response.data.status !== "ERR") {
-          setPanels(response.data)
-        }
-      } catch (error) {
-        console.error("خطا در دریافت اطلاعات پنل‌ها:", error)
-      }
-    }
-    
-    fetchPanels()
-  }, [])
-
-  const getPanelInfo = (countryCode) => {
-    const panel = panels.find(panel => panel.panel_country === countryCode)
-    if (panel) {
-      const remainingCapacity = panel.panel_user_max_count - panel.active_users
-      return {
-        name: panel.panel_name,
-        remainingCapacity: remainingCapacity > 0 ? remainingCapacity : 0
-      }
-    }
-    return { name: countryCode, remainingCapacity: 0 }
-  }
-
   return (
     <Box sx={{ width: '100%' }}>
       <FormControl fullWidth>
@@ -63,14 +33,12 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
           onChange={handleChange}
           disabled={disabled}
         >
-          {agent.country.split(",").map((item) => {
-            const panelInfo = getPanelInfo(item)
-            return (
-              <MenuItem key={item} value={item}>
-                {panelInfo.name} (ظرفیت: {panelInfo.remainingCapacity})
-              </MenuItem>
-            )
-          })}
+          {agent.country.split(",").map((item) => (
+            <MenuItem key={item} value={item}>
+              {item}
+            </MenuItem>
+          ))}
+
         </Select>
       </FormControl>
     </Box>
