@@ -1099,35 +1099,6 @@ app.post("/get_panel_inbounds", async (req, res) =>
 
 });
 
-app.post("/get_agent_panels", async (req, res) => 
-{
-    var { access_token } = req.body;
-    var agent = await token_to_account(access_token);
-    var panels = await get_panels();
-    
-    // فیلتر کردن پنل‌ها بر اساس کشورهای مجاز برای ایجنت
-    var agent_panels = panels.filter(panel => 
-        agent.country.split(",").includes(panel.panel_country) && !panel.disable
-    );
-
-    // اضافه کردن اطلاعات ظرفیت باقی‌مانده به هر پنل
-    var panels_with_capacity = agent_panels.map(panel => {
-        return {
-            panel_country: panel.panel_country,
-            panel_name: panel.panel_name,
-            capacity: {
-                current: panel.active_users,
-                max: panel.panel_user_max_count
-            },
-            remaining_capacity: panel.panel_user_max_count - panel.active_users,
-            is_full: panel.active_users >= panel.panel_user_max_count,
-            panel_type: panel.panel_type
-        };
-    });
-
-    res.send(panels_with_capacity);
-});
-
 app.post("/switch_countries", async(req,res) => 
 {
     var { access_token , country_from , country_to } = req.body;

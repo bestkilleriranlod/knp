@@ -239,7 +239,7 @@ const CreateUser = ({ onClose, showForm }) => {
         { label: "Data Limit", type: "create_user_number", id: "dataLimit", name: "dataLimit", disabled: isDataLimitDisabled, value:dataLimitValue, onChange: (e) => setDataLimitValue(e.target.value) },
         { label: "Ip Limit", type: "create_user_number", id: "ipLimit", name: "ipLimit", disabled: isIpLimitDisabled, value:ipLimitValue, onChange: (e) => setIpLimitValue(e.target.value) },
         { label: "Days To Expire", type: expireInputType, id: "daysToExpire", name: "daysToExpire" , onChange: setAmneziaDays, value: amneziaDays},
-        { label: "پنل", type: "multi-select2-capacity", id: "country", name: "country", onChange: setCountry },
+        { label: "Country", type: "multi-select2", id: "country", name: "country", onChange: setCountry },
         { label: "Description", type: "text", id: "desc", name: "desc" },
     ]
 
