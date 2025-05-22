@@ -4,6 +4,7 @@ import { motion } from "framer-motion"
 import Dropdown from "../Dropdown"
 import MultiSelect from "./inputs/MultiSelect"
 import MultiSelect2 from "./inputs/MultiSelect2"
+import MultiSelect2WithCapacity from "./inputs/MultiSelect2WithCapacity"
 import ValueAdjuster from './inputs/ValueAdjuster'
 import MultiSelect5 from "./inputs/MultiSelect5"
 
@@ -37,6 +38,15 @@ const FormField = ({
             <motion.div className="modal__form__group" >
                 <label className="modal__form__label" htmlFor={id}>{label}</label>
                 <MultiSelect2 editValue={editValue} onChange={onChange} value={value} defaultValue={defaultValue} id={id} disabled={disabled} />
+            </motion.div>
+        )
+    }
+
+    if (type === "multi-select2-capacity") {
+        return (
+            <motion.div className="modal__form__group" >
+                <label className="modal__form__label" htmlFor={id}>{label}</label>
+                <MultiSelect2WithCapacity editValue={editValue} onChange={onChange} value={value} defaultValue={defaultValue} id={id} disabled={disabled} />
             </motion.div>
         )
     }
