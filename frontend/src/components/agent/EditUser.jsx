@@ -161,7 +161,9 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const primaryButtons = [
         { label: "Cancel", className: "outlined", onClick: onClose },
         {
-            label: "Edit User", className: "primary", onClick: () => onEditItem(
+            label: panel_type === "AMN" ? "Renew Account" : "Edit User", 
+            className: "primary", 
+            onClick: () => onEditItem(
                 item.id,
                 document.getElementById("data_limit").value,
                 expireInputType === "expire_selection" ? amneziaDays : document.getElementById("expire").value,
@@ -172,7 +174,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                 safu
             ),
             disabled: editMode,
-            pendingText: "Editing..."
+            pendingText: panel_type === "AMN" ? "Renewing..." : "Editing..."
         },
     ]
 
@@ -262,7 +264,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             <LeadingIcon>
                 <EditIcon />
             </LeadingIcon>
-            <h1 className="modal__title">Edit user</h1>
+            <h1 className="modal__title">{panel_type === "AMN" ? "Renew Account" : "Edit User"}</h1>
             <div className="close-icon" onClick={onClose}>
                 <XMarkIcon />
             </div>
