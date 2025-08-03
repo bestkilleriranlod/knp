@@ -110,29 +110,32 @@ const CreateUser = ({ onClose, showForm }) => {
             }
 
 
-            if(!panelInboundsObj.panel_type || panelInboundsObj.panel_type === "MZ")
+            const panelType = panelInboundsObj.panel_type || "MZ";
+            delete panelInboundsObj.panel_type;
+            
+            const availableProtocolsName = Object.keys(panelInboundsObj);
+            console.log("Available protocols:", availableProtocolsName);
+            
+            if(panelType === "MZ")
             {
                 setIsIpLimitDisabled(true)
                 setIsDataLimitDisabled(false)
                 setIpLimitValue(2)
                 setDataLimitValue("")
                 setExpireInputType("number")
+                setSelectedProtocols(availableProtocolsName)
             }
-
-            else if(panelInboundsObj.panel_type === "AMN")
+            else if(panelType === "AMN")
             {
                 setIsDataLimitDisabled(true)
                 setIsIpLimitDisabled(true)
                 setDataLimitValue(10000)
                 setIpLimitValue(5)
                 setExpireInputType("expire_selection")
+                
+                // برای اکانت‌های امنزیا، پروتکل‌ها را به طور خودکار انتخاب می‌کنیم
+                setSelectedProtocols(availableProtocolsName)
             }
-
-            delete panelInboundsObj.panel_type;
-
-            const availableProtocolsName = Object.keys(panelInboundsObj);
-            console.log(availableProtocolsName)
-            setSelectedProtocols(availableProtocolsName)
             const updatedProtocols = protocols.map((protocol) => ({
                 name: protocol.name,
                 disabled: !availableProtocolsName.includes(protocol.name),
@@ -330,75 +333,77 @@ const CreateUser = ({ onClose, showForm }) => {
 
 
                             </form>
-                            <div className={`${styles['protocols-section']}`}>
-                                <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
-                                <div className={`${styles.protocols}`}>
-                                    {protocols.map((protocol, index) => (
-                                        <motion.div key={index}
-                                            className={`${styles.protocol} ${selectedProtocols.includes(protocol.name) ? styles.selected : protocol.disabled ? styles.disabled : ''}`}
-                                            onClick={() => handleSelectProtocol(protocol)}
-                                        >
-                                            <div className="flex justify-between flex-col w-full">
-                                                <div className="flex justify-between">
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <h5 className={styles['protocol__name']}>{protocol.name}</h5>
-                                                        <p className={styles['protocol__description']}>{
-                                                            protocol.name === "vmess" ? "Fast And Secure" :
-                                                                protocol.name === "vless" ? "Lightweight, fast and secure" :
-                                                                    protocol.name === "trojan" ? "Lightweight, secure and lightening fast" :
-                                                                        protocol.name === "shadowsocks" ? "Fast, but not efficient as others" : ""
+                            {expireInputType !== "expire_selection" && (
+                                <div className={`${styles['protocols-section']}`}>
+                                    <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
+                                    <div className={`${styles.protocols}`}>
+                                        {protocols.map((protocol, index) => (
+                                            <motion.div key={index}
+                                                className={`${styles.protocol} ${selectedProtocols.includes(protocol.name) ? styles.selected : protocol.disabled ? styles.disabled : ''}`}
+                                                onClick={() => handleSelectProtocol(protocol)}
+                                            >
+                                                <div className="flex justify-between flex-col w-full">
+                                                    <div className="flex justify-between">
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <h5 className={styles['protocol__name']}>{protocol.name}</h5>
+                                                            <p className={styles['protocol__description']}>{
+                                                                protocol.name === "vmess" ? "Fast And Secure" :
+                                                                    protocol.name === "vless" ? "Lightweight, fast and secure" :
+                                                                        protocol.name === "trojan" ? "Lightweight, secure and lightening fast" :
+                                                                            protocol.name === "shadowsocks" ? "Fast, but not efficient as others" : ""
 
-                                                        }</p>
+                                                            }</p>
+                                                        </div>
+                                                        {selectedProtocols.includes(protocol.name) && <Button className="gray-100" onClick={(e) => handleClickMoreOption(e,index)}>
+                                                            <ThreeDotsIcon /></Button>}
                                                     </div>
-                                                    {selectedProtocols.includes(protocol.name) && <Button className="gray-100" onClick={(e) => handleClickMoreOption(e,index)}>
-                                                        <ThreeDotsIcon /></Button>}
-                                                </div>
-                                                <AnimatePresence>
-                                                    {selectedProtocols.includes(protocol.name) && isMoreOptionClicked[index] && (
-                                                        <motion.div
-                                                            className={styles['more-options']}
-                                                            initial={{ height: 0 }}
-                                                            animate={{ height: "auto" }}
-                                                            exit={{ height: 0 }}
-                                                        >
+                                                    <AnimatePresence>
+                                                        {selectedProtocols.includes(protocol.name) && isMoreOptionClicked[index] && (
+                                                            <motion.div
+                                                                className={styles['more-options']}
+                                                                initial={{ height: 0 }}
+                                                                animate={{ height: "auto" }}
+                                                                exit={{ height: 0 }}
+                                                            >
 
 
-                                                        {
-                                                            availableInbounds[protocol.name] && availableInbounds[protocol.name].length > 0 && (
-                                                                availableInbounds[protocol.name].map((inbound, index) => (
-                                                                    <div key={index} className='flex items-center gap-1' onClick={(e) => handleSelectInbound(e,protocol,inbound.tag)}  style={{height:'10px',marginTop:"10px"}} >
-                                                                    <FormControlLabel
-                                                                        control={<Checkbox id={inbound.tag.replaceAll(" ", "-")}
-                                                                             name={inbound.tag}
-                                                                            sx={{
-                                                                                marginLeft: "-9px",
-                                                                                marginRight: "-9px",
-                                                                                '& .MuiSvgIcon-root': { fontSize: 17 }
-                                                                            }}
-                                                                            checked={selectedInbounds[protocol.name].includes(inbound.tag)}
-                                                                            
-                                                                            
-                                                                            />}
-                                                                         /> <div className={`${selectedInbounds[protocol.name].includes(inbound.tag)?"":"striked_text"} inbound_tag`}>{inbound.tag}</div>
-                                                                    </div>
-                                                                ))
-                                                            )
-                                                        }
                                                             {
-                                                            protocol.name === "vless" && (
-                                                            <div className='flex flex-col gap-1.5' style={{ paddingTop: "1rem" }}>
-                                                                <h6 style={{ fontWeight: 400 }}>Flow</h6>
-                                                                <Dropdown options={flowOptions} onChange={handleSelectFlow} value={flowValue} />
-                                                            </div>
-                                                            )}
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-                                        </motion.div>
-                                    ))}
+                                                                availableInbounds[protocol.name] && availableInbounds[protocol.name].length > 0 && (
+                                                                    availableInbounds[protocol.name].map((inbound, index) => (
+                                                                        <div key={index} className='flex items-center gap-1' onClick={(e) => handleSelectInbound(e,protocol,inbound.tag)}  style={{height:'10px',marginTop:"10px"}} >
+                                                                        <FormControlLabel
+                                                                            control={<Checkbox id={inbound.tag.replaceAll(" ", "-")}
+                                                                                 name={inbound.tag}
+                                                                                sx={{
+                                                                                    marginLeft: "-9px",
+                                                                                    marginRight: "-9px",
+                                                                                    '& .MuiSvgIcon-root': { fontSize: 17 }
+                                                                                }}
+                                                                                checked={selectedInbounds[protocol.name].includes(inbound.tag)}
+                                                                                
+                                                                                
+                                                                                />}
+                                                                             /> <div className={`${selectedInbounds[protocol.name].includes(inbound.tag)?"":"striked_text"} inbound_tag`}>{inbound.tag}</div>
+                                                                        </div>
+                                                                    ))
+                                                                )
+                                                            }
+                                                                {
+                                                                protocol.name === "vless" && (
+                                                                <div className='flex flex-col gap-1.5' style={{ paddingTop: "1rem" }}>
+                                                                    <h6 style={{ fontWeight: 400 }}>Flow</h6>
+                                                                    <Dropdown options={flowOptions} onChange={handleSelectFlow} value={flowValue} />
+                                                                </div>
+                                                                )}
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </main>
                         {formFooter}
                     </Modal>
