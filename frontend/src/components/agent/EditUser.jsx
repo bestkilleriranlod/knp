@@ -55,11 +55,25 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             setIsMoreOptionClicked(false)
         }
 
-       setSafu((item && Boolean(item.safu)) || null)
-        
+        setSafu((item && Boolean(item.safu)) || null)
+
+    }, [showForm])
+
+    useEffect(() => {
         if (item) {
-            // تنظیم نوع فیلد انقضا براساس نوع پنل
-            if (item?.corresponding_panel_id == 948263502 || item?.corresponding_panel_id == 855340348 || item?.corresponding_panel_id == 952780616) {
+            const userProtocols = Object.keys(item.inbounds)
+            setSelectedProtocols(userProtocols)
+            setIsDataLimitDisabled(b2gb(item.data_limit) == 10000)
+            setCountry(item.country)
+            if (item.inbounds.vless) {
+                setFlowValue({ label: item.inbounds.vless.flow, value: item.inbounds.vless.flow })
+            }
+
+            // تشخیص نوع پنل امنزیا
+            console.log("Panel ID:", item.corresponding_panel_id)
+            console.log("Panel Type:", panel_type)
+            
+            if (panel_type === "AMN") {
                 setExpireInputType("expire_selection")
                 // تنظیم مقدار روز‌های امنزیا با استفاده از مقدار روز فعلی کاربر
                 if (item.expire) {
@@ -77,20 +91,6 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                 setExpireInputType("number")
                 setAmneziaDays(null)
             }
-        }
-
-    }, [showForm])
-
-    useEffect(() => {
-        if (item) {
-            const userProtocols = Object.keys(item.inbounds)
-            setSelectedProtocols(userProtocols)
-            setIsDataLimitDisabled(b2gb(item.data_limit) == 10000)
-            setCountry(item.country)
-            if (item.inbounds.vless) {
-                setFlowValue({ label: item.inbounds.vless.flow, value: item.inbounds.vless.flow })
-            }
-
         }
     }, [item])
 
@@ -164,7 +164,19 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
         },
     ]
 
-    const panel_type = (item?.corresponding_panel_id == 948263502 || item?.corresponding_panel_id == 855340348 || item?.corresponding_panel_id == 952780616) ? "AMN" : "MZ"
+    const getPanelType = () => {
+        if (!item) return "MZ";
+        
+        // تشخیص نوع پنل از روی شناسه پنل یا کشور
+        if (item.corresponding_panel_id == 948263502 || 
+            item.corresponding_panel_id == 855340348 || 
+            item.corresponding_panel_id == 952780616 ||
+            (item.country && item.country.includes("Amnezia")))
+            return "AMN";
+        return "MZ";
+    }
+    
+    const panel_type = getPanelType()
     
 
     const secondaryButtons = [
