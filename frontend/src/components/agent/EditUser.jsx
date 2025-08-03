@@ -262,7 +262,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             <LeadingIcon>
                 <EditIcon />
             </LeadingIcon>
-            <h1 className="modal__title">Renew</h1>
+            <h1 className="modal__title">Renew User</h1>
             <div className="close-icon" onClick={onClose}>
                 <XMarkIcon />
             </div>
