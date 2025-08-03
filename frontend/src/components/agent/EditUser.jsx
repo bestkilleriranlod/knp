@@ -122,7 +122,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             const availableProtocolsName = Object.keys(panelInboundsObj);
             
             // اگر امنزیا است، تمام پروتکل‌های موجود را انتخاب می‌کنیم
-            if (panel_type === "AMN") {
+            if (panelType === "AMN") {
                 setSelectedProtocols(availableProtocolsName);
             }
             // در غیر این صورت، منطق قبلی را اجرا می‌کنیم
@@ -161,7 +161,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const primaryButtons = [
         { label: "Cancel", className: "outlined", onClick: onClose },
         {
-            label: panel_type === "AMN" ? "Renew Account" : "Edit User", 
+            label: panelType === "AMN" ? "Renew Account" : "Edit User", 
             className: "primary", 
             onClick: () => onEditItem(
                 item.id,
@@ -173,31 +173,35 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                 document.getElementById("desc").value,
                 safu
             ),
-            disabled: editMode,
-            pendingText: panel_type === "AMN" ? "Renewing..." : "Editing..."
+            disabled: editMode || !item,
+            pendingText: panelType === "AMN" ? "Renewing..." : "Editing..."
         },
     ]
 
-    const getPanelType = () => {
-        if (!item) return "MZ";
+    // اضافه کردن state برای نوع پنل
+    const [panelType, setPanelType] = useState("MZ")
+    
+    // به روز رسانی نوع پنل هر زمان که item تغییر کند
+    useEffect(() => {
+        if (!item) return;
         
         // تشخیص نوع پنل از روی شناسه پنل یا کشور
         if (item.corresponding_panel_id == 948263502 || 
             item.corresponding_panel_id == 855340348 || 
             item.corresponding_panel_id == 952780616 ||
-            (item.country && item.country.includes("Amnezia")))
-            return "AMN";
-        return "MZ";
-    }
-    
-    const panel_type = getPanelType()
+            (item.country && item.country.includes("Amnezia"))) {
+            setPanelType("AMN");
+        } else {
+            setPanelType("MZ");
+        }
+    }, [item])
     
 
     const secondaryButtons = [
-        { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item.username) },
-        panel_type == "AMN"? { icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item.id) } :
-        { icon: <RefreshIcon />, type: "button", label: "Reset Usage", className: "ghosted", onClick: () => onResetItem(item.id) },
-        { icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item.id, item.status) },
+        { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => item ? onDeleteItem(e, item.username) : null },
+        panelType === "AMN" ? { icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item?.id) } :
+        { icon: <RefreshIcon />, type: "button", label: "Reset Usage", className: "ghosted", onClick: () => item ? onResetItem(item.id) : null },
+        { icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => item ? onPowerItem(e, item.id, item.status) : null },
     ]
 
     const b2gb = (bytes) => {
@@ -264,7 +268,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             <LeadingIcon>
                 <EditIcon />
             </LeadingIcon>
-            <h1 className="modal__title">{panel_type === "AMN" ? "Renew Account" : "Edit User"}</h1>
+            <h1 className="modal__title">{panelType === "AMN" ? "Renew Account" : "Edit User"}</h1>
             <div className="close-icon" onClick={onClose}>
                 <XMarkIcon />
             </div>
@@ -357,14 +361,14 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                                 ))}
 
                             <FormControlLabel
-                                control={<Checkbox id="safu" name="safu"
-                                    defaultChecked={item.safu} onChange={handle_safu_change}
+                                                                    control={<Checkbox id="safu" name="safu"
+                                    defaultChecked={item?.safu || false} onChange={handle_safu_change}
                                     sx={{marginLeft: "-9px",}}
                                     />}
                                 label="Start after first use" />
 
                             </form>
-                            {panel_type !== "AMN" && (
+                            {panelType !== "AMN" && (
                                 <div className={`${styles['protocols-section']}`}>
                                     <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
                                     <div className={`${styles.protocols}`}>
