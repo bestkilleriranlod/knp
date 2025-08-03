@@ -40,6 +40,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const [isMoreOptionClicked, setIsMoreOptionClicked] = useState(false)
     const [flowValue, setFlowValue] = useState({ label: "none", value: "none" })
     const [country, setCountry] = useState("")
+    const [amneziaDays, setAmneziaDays] = useState(null)
+    const [expireInputType, setExpireInputType] = useState("number")
     const [isLoadingProtocols, setIsLoadingProtocols] = useState(false)
     const [hasError, setHasError] = useState(false)
     const [error_msg, setError_msg] = useState("failed to switch countries")
@@ -54,6 +56,28 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
         }
 
        setSafu((item && Boolean(item.safu)) || null)
+        
+        if (item) {
+            // تنظیم نوع فیلد انقضا براساس نوع پنل
+            if (item?.corresponding_panel_id == 948263502 || item?.corresponding_panel_id == 855340348 || item?.corresponding_panel_id == 952780616) {
+                setExpireInputType("expire_selection")
+                // تنظیم مقدار روز‌های امنزیا با استفاده از مقدار روز فعلی کاربر
+                if (item.expire) {
+                    const days = timeStampToDay(item.expire)
+                    // انتخاب نزدیک‌ترین مقدار به 30، 60 یا 90
+                    if (days <= 30) {
+                        setAmneziaDays(30)
+                    } else if (days <= 60) {
+                        setAmneziaDays(60)
+                    } else {
+                        setAmneziaDays(90)
+                    }
+                }
+            } else {
+                setExpireInputType("number")
+                setAmneziaDays(null)
+            }
+        }
 
     }, [showForm])
 
@@ -117,7 +141,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
         { label: "Username", type: "text", id: "username", name: "username", disabled: true },
         { label: "Data Limit", type: "number", id: "data_limit", name: "data_limit", disabled: isDataLimitDisabled },
         { label: "Ip Limit", type: "number", id: "ipLimit", name: "ipLimit", disabled: true },
-        { label: "Days To Expire", type: "number", id: "expire", name: "expire" },
+        { label: "Days To Expire", type: expireInputType, id: "expire", name: "expire", onChange: setAmneziaDays, value: amneziaDays },
         { label: "Country", type: "multi-select2", id: "country", name: "country", onChange: setCountry, disabled: true },
         { label: "Description", type: "text", id: "desc", name: "desc" },
     ]
@@ -128,7 +152,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             label: "Edit User", className: "primary", onClick: () => onEditItem(
                 item.id,
                 document.getElementById("data_limit").value,
-                document.getElementById("expire").value,
+                expireInputType === "expire_selection" ? amneziaDays : document.getElementById("expire").value,
                 document.getElementById("country").textContent,
                 selectedProtocols,
                 flowValue.value,
