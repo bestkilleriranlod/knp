@@ -248,7 +248,7 @@ const CreateUser = ({ onClose, showForm }) => {
 
     const primaryButtons = [
         { label: "Cancel", className: "outlined", onClick: onClose },
-        { label: "Create User", className: "primary", onClick: handleSubmitForm, disabled: createMode, pendingText: "Creating..." }
+        { label: "Create User", className: "primary", onClick: handleSubmitForm, disabled: createMode || !country, pendingText: "Creating..." }
     ]
 
     const formHeader = (
@@ -288,52 +288,69 @@ const CreateUser = ({ onClose, showForm }) => {
                         {formHeader}
                         <main className={styles['modal__body']}>
                             <form className={styles['modal__form']}>
-                                {formFields.map((group, rowIndex) => (
-                                    <div key={rowIndex} className="flex gap-16">
-                                        {Array.isArray(group) ? group.map((field, index) => {
-                                            return (<FormField
-                                                key={index}
-                                                label={field.label}
-                                                type={field.type}
-                                                id={field.id}
-                                                name={field.name}
-                                                animateDelay={rowIndex * 0.1}
-                                                disabled={field.disabled}
-                                                options={field.options}
-                                                value={field.value}
-                                                defaultValue={field.defaultValue}
-                                                onChange={field.onChange}
-                                                placeholder={field.placeholder}
-                                            />)
-                                        }) : (
-                                            <FormField
-                                                key={rowIndex}
-                                                label={group.label}
-                                                type={group.type}
-                                                id={group.id}
-                                                name={group.name}
-                                                animateDelay={rowIndex * 0.1}
-                                                disabled={group.disabled}
-                                                options={group.options}
-                                                value={group.value}
-                                                defaultValue={group.defaultValue}
-                                                onChange={group.onChange}
-                                                placeholder={group.placeholder}
-                                            />
-                                        )}
-                                    </div>
-                                ))}
+                                {/* همیشه فیلد انتخاب کشور نمایش داده می‌شود */}
+                                <div className="flex gap-16">
+                                    <FormField
+                                        label="Country"
+                                        type="multi-select2"
+                                        id="country"
+                                        name="country"
+                                        onChange={setCountry}
+                                        animateDelay={0.1}
+                                    />
+                                </div>
 
-                            <FormControlLabel
-                                control={<Checkbox id="safu" name="safu"
-                                    defaultChecked={false} onChange={handle_safu_change}
-                                    sx={{marginLeft: "-9px",}}
-                                    />}
-                                label="Start after first use" />
+                                {/* سایر فیلدها فقط بعد از انتخاب کشور نمایش داده می‌شوند */}
+                                {country && (
+                                    <>
+                                        {formFields.filter(field => field.id !== "country").map((group, rowIndex) => (
+                                            <div key={rowIndex} className="flex gap-16">
+                                                {Array.isArray(group) ? group.map((field, index) => {
+                                                    return (<FormField
+                                                        key={index}
+                                                        label={field.label}
+                                                        type={field.type}
+                                                        id={field.id}
+                                                        name={field.name}
+                                                        animateDelay={rowIndex * 0.1}
+                                                        disabled={field.disabled}
+                                                        options={field.options}
+                                                        value={field.value}
+                                                        defaultValue={field.defaultValue}
+                                                        onChange={field.onChange}
+                                                        placeholder={field.placeholder}
+                                                    />)
+                                                }) : (
+                                                    <FormField
+                                                        key={rowIndex}
+                                                        label={group.label}
+                                                        type={group.type}
+                                                        id={group.id}
+                                                        name={group.name}
+                                                        animateDelay={rowIndex * 0.1}
+                                                        disabled={group.disabled}
+                                                        options={group.options}
+                                                        value={group.value}
+                                                        defaultValue={group.defaultValue}
+                                                        onChange={group.onChange}
+                                                        placeholder={group.placeholder}
+                                                    />
+                                                )}
+                                            </div>
+                                        ))}
+
+                                        <FormControlLabel
+                                            control={<Checkbox id="safu" name="safu"
+                                                defaultChecked={false} onChange={handle_safu_change}
+                                                sx={{marginLeft: "-9px",}}
+                                                />}
+                                            label="Start after first use" />
+                                    </>
+                                )}
 
 
                             </form>
-                            {expireInputType !== "expire_selection" && (
+                            {country && expireInputType !== "expire_selection" && (
                                 <div className={`${styles['protocols-section']}`}>
                                     <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
                                     <div className={`${styles.protocols}`}>
