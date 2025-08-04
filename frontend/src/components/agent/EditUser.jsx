@@ -188,27 +188,38 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
         { label: "Cancel", className: "outlined", onClick: onClose },
         {
             label: "Renew User", className: "primary", onClick: () => {
-                if (!selectedPlan) {
-                    setError_msg("لطفاً یک پلن انتخاب کنید")
-                    setHasError(true)
-                    return
+                            if (!selectedPlan) {
+                setError_msg("Please select a plan")
+                setHasError(true)
+                return
+            }
+            
+            // Make sure protocols are selected even though protocol section is hidden
+            if (selectedProtocols.length === 0) {
+                // If user has inbounds, use those protocols
+                if (item && item.inbounds) {
+                    setSelectedProtocols(Object.keys(item.inbounds))
+                } else {
+                    // Default to available protocols
+                    getProtocols()
                 }
-                
-                // محاسبه مقادیر بر اساس پلن انتخابی
+            }
+            
+            // Calculate values based on selected plan
                 const dataLimit = panel_type === "AMN" ? 10000 : selectedPlan.dataLimit
                 const daysToExpire = selectedPlan.days
                 
-                // ارسال پارامتر is_reset_data=true برای ریست کردن حجم در تمدید
+                // Send is_reset_data=true parameter to reset data usage during renewal
                 onEditItem(
                     item.id,
                     dataLimit,
                     daysToExpire,
-                    item.country, // همیشه از کشور اصلی کاربر استفاده کن
+                    item.country, // Always use the user's original country
                     selectedProtocols,
                     flowValue.value,
                     document.getElementById("desc").value,
                     safu,
-                    true // is_reset_data=true برای ریست کردن خودکار حجم در تمدید
+                    true // is_reset_data=true for automatic data usage reset during renewal
                 )
             },
             disabled: editMode,
@@ -412,10 +423,11 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                             </div>
 
                             </form>
-                            {panel_type !== "AMN" && (
+                            {/* برای هیچ پنلی (نه v2ray و نه امنزیا) بخش پروتکل‌ها نمایش داده نمی‌شود */}
+                            {/* {panel_type !== "AMN" && (
                                 <div className={`${styles['protocols-section']}`}>
                                     <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
-                                    <div className={`${styles.protocols}`}>
+                                    <div className={`${styles.protocols}`}> */}
                                         {protocols.map((protocol, index) => (
                                             <motion.div key={index}
                                                 className={`${styles.protocol} ${selectedProtocols.includes(protocol.name) ? styles.selected : protocol.disabled ? styles.disabled : ''}`}
@@ -453,9 +465,9 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                                                 </div>
                                             </motion.div>
                                         ))}
-                                    </div>
+                                                                            {/* </div>
                                 </div>
-                            )}
+                            )} */}
                         </main>
                         {formFooter}
                     </Modal>

@@ -198,7 +198,7 @@ const CreateUser = ({ onClose, showForm }) => {
 
     const handleSubmitForm = () => {
         if (!selectedPlan) {
-            setError_msg("لطفاً یک پلن انتخاب کنید")
+            setError_msg("Please select a plan")
             setHasError(true)
             return
         }
@@ -210,6 +210,13 @@ const CreateUser = ({ onClose, showForm }) => {
         const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
         const desc = document.getElementById("desc").value
         const ip_limit = document.getElementById("ipLimit").value
+        
+        // Since the protocols section is hidden, ensure protocols are set 
+        // Make sure at least one protocol is selected
+        if (selectedProtocols.length === 0) {
+            // Default to all available protocols based on panel type
+            getProtocols() // This will set the protocols based on the country
+        }
         
         createUserOnServer(username, data_limit, expire, country, desc, ip_limit)
     }
@@ -387,10 +394,11 @@ const CreateUser = ({ onClose, showForm }) => {
                             )}
 
                             </form>
-                            {country && expireInputType === "plan_selection" && dataLimitValue != 10000 && (
+                            {/* برای هیچ پنلی (نه v2ray و نه امنزیا) بخش پروتکل‌ها نمایش داده نمی‌شود */}
+                            {/* {country && expireInputType === "plan_selection" && dataLimitValue != 10000 && (
                                 <div className={`${styles['protocols-section']}`}>
                                     <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
-                                    <div className={`${styles.protocols}`}>
+                                    <div className={`${styles.protocols}`}> */}
                                         {protocols.map((protocol, index) => (
                                             <motion.div key={index}
                                                 className={`${styles.protocol} ${selectedProtocols.includes(protocol.name) ? styles.selected : protocol.disabled ? styles.disabled : ''}`}
@@ -455,9 +463,9 @@ const CreateUser = ({ onClose, showForm }) => {
                                                 </div>
                                             </motion.div>
                                         ))}
-                                    </div>
+                                                                            {/* </div>
                                 </div>
-                            )}
+                            )} */}
                         </main>
                         {formFooter}
                     </Modal>
