@@ -33,8 +33,12 @@ case "$1" in
         cd /root/knp && docker compose down knp-frontend && docker image rm knp-knp-frontend && docker compose build --no-cache knp-frontend && docker compose up -d knp-frontend
         echo "Frontend has been rebuilt and restarted"
         ;;
+    debug-frontend)
+        cd /root/knp && docker compose down knp-frontend && docker image rm knp-knp-frontend && docker compose build --no-cache knp-frontend && docker compose up knp-frontend
+        echo "Frontend is running in debug mode. Press Ctrl+C to stop"
+        ;;
     *)
-        echo "Usage: knp {start|stop|restart|logs|update|update-frontend}" 
+        echo "Usage: knp {start|stop|restart|logs|update|update-frontend|debug-frontend}" 
         echo "For logs: knp logs {frontend|backend|sync}"
         exit 1
         ;;
