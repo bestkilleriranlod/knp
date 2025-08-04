@@ -790,9 +790,18 @@ app.post("/edit_user", async (req, res) => {
     var old_expire = Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400) + 1;
     var old_country = user_obj.country;
 
+    // برای دیباگ
+    console.log("Edit user - Agent countries:", corresponding_agent.country);
+    console.log("Edit user - Selected country:", country);
+    console.log("Edit user - Old country:", old_country);
+    
     if (corresponding_agent.disable) res.send({ status: "ERR", msg: "your account is disabled" })
     else if(!corresponding_agent.edit_access) res.send({ status: "ERR", msg: "access denied" })
-    else if (!corresponding_agent.country.split(",").includes(country) && old_country !== country) res.send({ status: "ERR", msg: "country access denied" })
+    // اجازه تمدید کاربران در پنل‌های پر شده
+    else if (!corresponding_agent.country.split(",").includes(country) && country !== old_country) {
+        console.log("Country access denied: country not in allowed list and different from old country");
+        res.send({ status: "ERR", msg: "country access denied" })
+    }
     else if(b2gb(user_obj.used_traffic) > data_limit) res.send({ status: "ERR", msg: "data limit can't be reduced" })
     else if (panel_obj.panel_type != "AMN" &&  data_limit - old_data_limit > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
     else if (panel_obj.panel_type == "AMN" && expire * AMNEZIA_COEFFICIENT > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })

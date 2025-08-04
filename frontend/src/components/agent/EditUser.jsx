@@ -165,7 +165,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                 item.id,
                 document.getElementById("data_limit").value,
                 expireInputType === "expire_selection" ? amneziaDays : document.getElementById("expire").value,
-                document.getElementById("country").textContent,
+                item.country, // همیشه از کشور اصلی کاربر استفاده کن
                 selectedProtocols,
                 flowValue.value,
                 document.getElementById("desc").value,
