@@ -146,12 +146,19 @@ const CreateUser = ({ onClose, showForm }) => {
                 // برای اکانت‌های امنزیا، پروتکل‌ها را به طور خودکار انتخاب می‌کنیم
                 setSelectedProtocols(availableProtocolsName)
                 
+                // محاسبه هزینه براساس AMNEZIA_COEFFICIENT و رند کردن به بالا
+                const AMNEZIA_COEFFICIENT = 2.3333; // مقدار یکسان با سرور
+                const calculateCost = (days) => {
+                    const exactCost = days * AMNEZIA_COEFFICIENT;
+                    return Math.ceil(exactCost); // رند به بالا
+                };
+                
                 // تنظیم پلن پیش‌فرض برای امنزیا
                 setSelectedPlan({
                     days: 30,
                     dataLimit: null,
-                    cost: 30 * (10/3), // هزینه امنزیا: 3.33 برابر روز
-                    label: `30 روز (${30 * (10/3)} واحد)`
+                    cost: calculateCost(30), // هزینه امنزیا با رند به بالا
+                    label: `30 Days (${calculateCost(30)} Units)`
                 });
                 setAmneziaDays(30)
             }

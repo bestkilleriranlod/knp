@@ -482,7 +482,17 @@ app.post("/create_user", async (req, res) => {
             else if(selected_panel.panel_type == "AMN") await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - expire * AMNEZIA_COEFFICIENT)});
             
 
-            await insert_to_logs(agent_id, "CREATE_USER", `created user !${username} with !${data_limit} GB data and !${expire} days of expire time on !${selected_panel.panel_name}`,access_token);
+            // Add more detailed log with panel type, IP limit and cost
+            const cost = selected_panel.panel_type == "AMN" ? 
+                Math.ceil(expire * AMNEZIA_COEFFICIENT) : 
+                data_limit;
+                
+            await insert_to_logs(
+                agent_id, 
+                "CREATE_USER", 
+                `created user !${username} with !${data_limit} GB data, !${expire} days of expire time, !${ip_limit} concurrent users on !${selected_panel.panel_name} (!${selected_panel.panel_type}). Cost: !${cost} units.`,
+                access_token
+            );
 
             res.send("DONE");
         }
@@ -594,8 +604,43 @@ app.post("/delete_user", async (req, res) => {
         }
 
         
+        // Prepare refund information for logs
+        let refundInfo = "";
+        const panelType = panel_obj.panel_type;
+        
+        // V2Ray refund info
+        if (panelType == "MZ") {
+            const usedLessThan150MB = user_obj.used_traffic < gb2b(0.15);
+            const lessThan7DaysPassed = Math.floor((Math.floor(Date.now() / 1000) - user_obj.created_at) / 86400) < 7;
+            
+            if (usedLessThan150MB && lessThan7DaysPassed) {
+                const remainingDays = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
+                const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
+                const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
+                refundInfo = `Refund granted: !${dataRefund} GB (${remainingDays} days remaining)`;
+            } else {
+                refundInfo = "No refund (usage > 150MB or account > 7 days old)";
+            }
+        }
+        
+        // Amnezia refund info
+        else if (panelType == "AMN") {
+            if (user_obj.used_traffic < gb2b(0.15)) {
+                const remainingDays = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
+                const amneziaCost = Math.ceil(remainingDays * AMNEZIA_COEFFICIENT);
+                refundInfo = `Refund granted: !${amneziaCost} units (${remainingDays} days remaining)`;
+            } else {
+                refundInfo = "No refund (usage > 150MB)";
+            }
+        }
+        
         await (await users_clct()).deleteOne({ username });
-        await insert_to_logs(agent_obj.id, "DELETE_USER", `deleted user !${username}`,access_token);
+        await insert_to_logs(
+            agent_obj.id, 
+            "DELETE_USER", 
+            `deleted user !${username} (!${panelType}). ${refundInfo}`,
+            access_token
+        );
         res.send("DONE");
     }
 
@@ -944,7 +989,21 @@ app.post("/edit_user", async (req, res) => {
             var account = await token_to_account(access_token);
 
 
-            await insert_to_logs(account.id, "EDIT_USER", `edited user !${user_obj.username} with !${data_limit} GB data and !${expire} days of expire time`,access_token);
+            // Add more detailed log with panel type, mode (renewal/reservation), IP limit and cost
+            const panelType = panel_obj.panel_type;
+            const cost = panelType == "AMN" ? 
+                Math.ceil(expire * AMNEZIA_COEFFICIENT) : 
+                data_limit;
+            
+            let modeInfo = mode || "renewal"; // Default to renewal if mode not specified
+            let resetInfo = is_reset_data ? "with data usage reset" : "without data usage reset";
+                
+            await insert_to_logs(
+                account.id, 
+                "EDIT_USER", 
+                `${modeInfo} of user !${user_obj.username} with !${data_limit} GB data and !${expire} days of expire time (!${panelType}) ${resetInfo}. Cost: !${cost} units.`,
+                access_token
+            );
             if(old_country == country) 
             {
                 if(user_obj.protocols != protocols || user_obj.flow_status != flow_status) update_user_links_bg(panel_obj.panel_url,panel_obj.panel_username,panel_obj.panel_password,user_obj.username,user_obj.id)
@@ -1035,11 +1094,27 @@ app.post("/reset_user", async (req, res) => {
 
 
 
+        // Calculate cost based on panel type
+        const panelType = panel_obj.panel_type;
+        const cost = panelType == "AMN" ? 
+            Math.ceil(Math.floor((user_obj.expire - user_obj.created_at) / 86400) * AMNEZIA_COEFFICIENT) : 
+            b2gb(user_obj.data_limit);
+        
+        // Get data usage information before reset
+        const dataUsedGB = b2gb(user_obj.used_traffic);
+        const dataLimitGB = b2gb(user_obj.data_limit);
+        const usagePercent = Math.round((dataUsedGB / dataLimitGB) * 100);
+        
         await update_user(user_id, { used_traffic: 0 });
         if(user_obj.status=="limited") await update_user(user_id, { status: "active" });
 
         var account = await token_to_account(access_token);
-        await insert_to_logs(account.id, "RESET_USER", `reseted user !${user_obj.username}`,access_token);
+        await insert_to_logs(
+            account.id, 
+            "RESET_USER", 
+            `reset data usage for user !${user_obj.username} (!${panelType}). Previous usage: !${dataUsedGB} GB out of !${dataLimitGB} GB (${usagePercent}%). Cost: !${cost} units.`,
+            access_token
+        );
         res.send("DONE");
     }
 });
@@ -1061,7 +1136,18 @@ app.post("/unlock_user", async (req, res) => {
         if (result == "ERR") {res.send({ status: "ERR", msg: "failed to connect to marzban" });return;}
 
         var account = await token_to_account(access_token);
-        await insert_to_logs(account.id, "UNLOCK_USER", `unlocked user !${user_obj.username}`,access_token);
+        
+        // Add panel type and user status details to the log
+        const panelType = panel_obj.panel_type;
+        const userStatus = user_obj.status || "unknown";
+        const daysRemaining = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
+        
+        await insert_to_logs(
+            account.id, 
+            "UNLOCK_USER", 
+            `unlocked user !${user_obj.username} (!${panelType}) with status !${userStatus}. Days remaining: !${daysRemaining}.`,
+            access_token
+        );
         res.send("DONE");
     }
 

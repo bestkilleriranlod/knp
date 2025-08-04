@@ -85,12 +85,19 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                     if (days > 45) closestDays = 60;
                     if (days > 75) closestDays = 90;
                     
+                    // محاسبه هزینه براساس AMNEZIA_COEFFICIENT و رند کردن به بالا
+                    const AMNEZIA_COEFFICIENT = 2.3333; // مقدار یکسان با سرور
+                    const calculateCost = (days) => {
+                        const exactCost = days * AMNEZIA_COEFFICIENT;
+                        return Math.ceil(exactCost); // رند به بالا
+                    };
+                    
                     // Set default plan based on number of days
                     setSelectedPlan({
                         days: closestDays,
                         dataLimit: null,
-                        cost: closestDays * (10/3), // هزینه امنزیا: 3.33 برابر روز
-                        label: `${closestDays} روز (${closestDays * (10/3)} واحد)`
+                        cost: calculateCost(closestDays), // هزینه امنزیا با رند به بالا
+                        label: `${closestDays} Days (${calculateCost(closestDays)} Units)`
                     });
                     setAmneziaDays(closestDays)
                 }
@@ -253,8 +260,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
 
     const secondaryButtons = [
         { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item.username) },
-        panel_type == "AMN"? { icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item.id) } :
-        { icon: <RefreshIcon />, type: "button", label: "Reset Usage", className: "ghosted", onClick: () => onResetItem(item.id) },
+        // فقط دکمه Unlock Account برای اکانت‌های Amnezia نمایش داده شود
+        ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item.id) }] : []),
         { icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item.id, item.status) },
     ]
 

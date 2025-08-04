@@ -10,25 +10,34 @@ import styles from './PlanSelection.module.css'
  * @param {number} availableData - Available data allocation for the agent
  */
 const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData }) => {
+  // AMNEZIA_COEFFICIENT constant from server
+  const AMNEZIA_COEFFICIENT = 2.3333; // Same value as in server.js
+  
+  // Function to calculate and round up cost
+  const calculateCost = (days) => {
+    const exactCost = days * AMNEZIA_COEFFICIENT;
+    return Math.ceil(exactCost); // Round up to nearest integer
+  };
+
   // Amnezia plans
   const amneziaPlan = [
     { 
       days: 30, 
       dataLimit: null, 
-      cost: 100, // Cost in system units - in Amnezia 3.33x days
-      label: '30 Days (100 Units)'
+      cost: calculateCost(30), // Cost calculated based on AMNEZIA_COEFFICIENT
+      label: `30 Days (${calculateCost(30)} Units)`
     },
     { 
       days: 60, 
       dataLimit: null, 
-      cost: 200, 
-      label: '60 Days (200 Units)'
+      cost: calculateCost(60),
+      label: `60 Days (${calculateCost(60)} Units)`
     },
     { 
       days: 90, 
       dataLimit: null, 
-      cost: 300, 
-      label: '90 Days (300 Units)'
+      cost: calculateCost(90),
+      label: `90 Days (${calculateCost(90)} Units)`
     }
   ]
 
