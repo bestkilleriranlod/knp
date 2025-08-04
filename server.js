@@ -792,7 +792,11 @@ app.post("/edit_user", async (req, res) => {
 
     if (corresponding_agent.disable) res.send({ status: "ERR", msg: "your account is disabled" })
     else if(!corresponding_agent.edit_access) res.send({ status: "ERR", msg: "access denied" })
-    else if (!corresponding_agent.country.split(",").includes(country)) res.send({ status: "ERR", msg: "country access denied" })
+    else if (!corresponding_agent.country.split(",").includes(country) && old_country !== country) {
+        // اگر کشور در لیست کشورهای مجاز عامل نیست و کاربر در حال تغییر کشور است، اجازه نده
+        // اما اگر کاربر در حال تمدید کاربر موجود در همان کشور قبلی است، اجازه بده
+        res.send({ status: "ERR", msg: "country access denied" })
+    }
     else if(b2gb(user_obj.used_traffic) > data_limit) res.send({ status: "ERR", msg: "data limit can't be reduced" })
     else if (panel_obj.panel_type != "AMN" &&  data_limit - old_data_limit > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
     else if (panel_obj.panel_type == "AMN" && expire * AMNEZIA_COEFFICIENT > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
