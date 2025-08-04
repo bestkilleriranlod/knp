@@ -77,15 +77,15 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             
             if (panel_type === "AMN") {
                 setExpireInputType("plan_selection")
-                // تنظیم مقدار روز‌های امنزیا با استفاده از مقدار روز فعلی کاربر
+                                    // Set Amnezia days based on current user's days
                 if (item.expire) {
                     const days = timeStampToDay(item.expire)
-                    // انتخاب نزدیک‌ترین مقدار به 30، 60 یا 90
+                    // Select closest value to 30, 60, or 90
                     let closestDays = 30;
                     if (days > 45) closestDays = 60;
                     if (days > 75) closestDays = 90;
                     
-                    // تنظیم پلن پیش‌فرض بر اساس تعداد روز
+                    // Set default plan based on number of days
                     setSelectedPlan({
                         days: closestDays,
                         dataLimit: null,
@@ -97,33 +97,25 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             } else {
                 setExpireInputType("plan_selection")
                 // تنظیم پلن v2ray بر اساس مقادیر فعلی کاربر
-                const days = timeStampToDay(item.expire)
                 const dataGB = b2gb(item.data_limit)
                 
-                // پیدا کردن نزدیک‌ترین پلن
-                const closestDays = days <= 45 ? 30 : 60;
+                // فقط پلن‌های 30 روزه
+                const days = 30;
                 let closestDataLimit = 30; // مقدار پیش‌فرض
                 
                 // تعیین نزدیک‌ترین حجم داده
-                if (closestDays === 30) {
-                    if (dataGB <= 22.5) closestDataLimit = 15;
-                    else if (dataGB <= 45) closestDataLimit = 30;
-                    else closestDataLimit = 60;
-                } else { // 60 روزه
-                    if (dataGB <= 45) closestDataLimit = 30;
-                    else if (dataGB <= 90) closestDataLimit = 60;
-                    else closestDataLimit = 120;
-                }
+                if (dataGB <= 22.5) closestDataLimit = 15;
+                else if (dataGB <= 45) closestDataLimit = 30;
+                else closestDataLimit = 60;
                 
                 // تنظیم پلن
-                let cost = closestDataLimit;
-                if (closestDays === 60) cost = closestDataLimit * 2;
+                const cost = closestDataLimit;
                 
                 setSelectedPlan({
-                    days: closestDays,
+                    days: days,
                     dataLimit: closestDataLimit,
                     cost: cost,
-                    label: `${closestDataLimit} گیگ - ${closestDays} روز (${cost} واحد)`
+                    label: `${closestDataLimit} گیگ - ${days} روز (${cost} واحد)`
                 });
             }
         }
@@ -206,6 +198,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                 const dataLimit = panel_type === "AMN" ? 10000 : selectedPlan.dataLimit
                 const daysToExpire = selectedPlan.days
                 
+                // ارسال پارامتر is_reset_data=true برای ریست کردن حجم در تمدید
                 onEditItem(
                     item.id,
                     dataLimit,
@@ -214,7 +207,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                     selectedProtocols,
                     flowValue.value,
                     document.getElementById("desc").value,
-                    safu
+                    safu,
+                    true // is_reset_data=true برای ریست کردن خودکار حجم در تمدید
                 )
             },
             disabled: editMode,

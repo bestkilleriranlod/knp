@@ -773,6 +773,7 @@ app.post("/edit_user", async (req, res) => {
         flow_status,
         desc,
         safu,
+        is_reset_data, // پارامتر جدید برای ریست کردن حجم
          } = req.body;
 
         if(process.env.RELEASE == "ARMAN") flow_status = "xtls-rprx-vision";
@@ -838,7 +839,19 @@ app.post("/edit_user", async (req, res) => {
 
             if(panel_obj.panel_type == "MZ")
             {
-                if(( 
+                // اگر is_reset_data فعال باشد یا پلن انتخاب شده باشد، حجم مصرفی را ریست کن
+                if(is_reset_data) {
+                    // ریست کردن حجم استفاده شده
+                    await update_user(user_id, { used_traffic: 0 });
+                    
+                    // کسر اعتبار از حساب عامل
+                    await update_account(corresponding_agent.id, { 
+                        allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
+                    });
+                    
+                    console.log(`Edit user - Reset data for user ${user_id}, deducted ${data_limit} GB`);
+                }
+                else if(( 
                     (corresponding_agent.business_mode == 1)
                     //(user_obj.used_traffic > user_obj.data_limit/4 || (user_obj.expire - user_obj.created_at) < (Math.floor(Date.now()/1000) - user_obj.created_at)*4 ) /*&&
                     //(old_data_limit > data_limit)

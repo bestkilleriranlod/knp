@@ -127,7 +127,7 @@ const CreateUser = ({ onClose, showForm }) => {
                 setExpireInputType("plan_selection")
                 setSelectedProtocols(availableProtocolsName)
                 
-                // تنظیم پلن پیش‌فرض برای v2ray
+                // تنظیم پلن پیش‌فرض برای v2ray (فقط 30 روزه)
                 setSelectedPlan({
                     days: 30,
                     dataLimit: 30,
