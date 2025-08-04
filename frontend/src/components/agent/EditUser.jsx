@@ -423,11 +423,9 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                             </div>
 
                             </form>
-                            {/* برای هیچ پنلی (نه v2ray و نه امنزیا) بخش پروتکل‌ها نمایش داده نمی‌شود */}
-                            {/* {panel_type !== "AMN" && (
-                                <div className={`${styles['protocols-section']}`}>
-                                    <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
-                                    <div className={`${styles.protocols}`}> */}
+                            <div className={`${styles['protocols-section']}`} style={{display: 'none'}}>
+                                <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
+                                <div className={`${styles.protocols}`}>
                                         {protocols.map((protocol, index) => (
                                             <motion.div key={index}
                                                 className={`${styles.protocol} ${selectedProtocols.includes(protocol.name) ? styles.selected : protocol.disabled ? styles.disabled : ''}`}
@@ -445,9 +443,9 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
 
                                                             }</p>
                                                         </div>
-                                                        {/* {selectedProtocols.includes(protocol.name) && protocol.name === 'vless' && <Button className="gray-100" onClick={(e) => handleClickMoreOption(e)}><ThreeDotsIcon /></Button>} */}
+                                                        {selectedProtocols.includes(protocol.name) && protocol.name === 'vless' && <Button className="gray-100" onClick={(e) => handleClickMoreOption(e)}><ThreeDotsIcon /></Button>}
                                                     </div>
-                                                    {/* <AnimatePresence>
+                                                    <AnimatePresence>
                                                         {selectedProtocols.includes(protocol.name) && protocol.name === 'vless' && isMoreOptionClicked && (
                                                             <motion.div
                                                                 className={styles['more-options']}
@@ -461,13 +459,12 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                                                                 </div>
                                                             </motion.div>
                                                         )}
-                                                    </AnimatePresence> */}
+                                                    </AnimatePresence>
                                                 </div>
                                             </motion.div>
                                         ))}
-                                                                            {/* </div>
+                                        </div>
                                 </div>
-                            )} */}
                         </main>
                         {formFooter}
                     </Modal>

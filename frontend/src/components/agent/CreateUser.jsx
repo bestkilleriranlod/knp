@@ -394,11 +394,10 @@ const CreateUser = ({ onClose, showForm }) => {
                             )}
 
                             </form>
-                            {/* برای هیچ پنلی (نه v2ray و نه امنزیا) بخش پروتکل‌ها نمایش داده نمی‌شود */}
-                            {/* {country && expireInputType === "plan_selection" && dataLimitValue != 10000 && (
-                                <div className={`${styles['protocols-section']}`}>
+                            {country && (
+                                <div className={`${styles['protocols-section']}`} style={{display: 'none'}}>
                                     <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
-                                    <div className={`${styles.protocols}`}> */}
+                                    <div className={`${styles.protocols}`}>
                                         {protocols.map((protocol, index) => (
                                             <motion.div key={index}
                                                 className={`${styles.protocol} ${selectedProtocols.includes(protocol.name) ? styles.selected : protocol.disabled ? styles.disabled : ''}`}
@@ -463,9 +462,9 @@ const CreateUser = ({ onClose, showForm }) => {
                                                 </div>
                                             </motion.div>
                                         ))}
-                                                                            {/* </div>
+                                        </div>
                                 </div>
-                            )} */}
+                            )}
                         </main>
                         {formFooter}
                     </Modal>
