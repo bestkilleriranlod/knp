@@ -67,17 +67,26 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
         const countriesWithStatus = agent.country.split(",").map(country => {
           const panel = panels.find(p => p.panel_country === country)
           let isFull = false
+          let spotsLeft = null
           
           if (panel) {
             // بررسی پر بودن پنل با استفاده از total_users و panel_user_max_count
             if (panel.total_users !== undefined && panel.panel_user_max_count) {
               isFull = panel.total_users >= panel.panel_user_max_count
-              console.log(`Panel ${country}: total_users=${panel.total_users}, max=${panel.panel_user_max_count}, isFull=${isFull}`)
+              
+              // محاسبه تعداد ظرفیت باقی‌مانده
+              if (!isFull) {
+                spotsLeft = panel.panel_user_max_count - panel.total_users
+                console.log(`Panel ${country}: total_users=${panel.total_users}, max=${panel.panel_user_max_count}, spotsLeft=${spotsLeft}`)
+              } else {
+                console.log(`Panel ${country}: total_users=${panel.total_users}, max=${panel.panel_user_max_count}, isFull=${isFull}`)
+              }
             }
             
             // بررسی غیرفعال بودن پنل
             if (panel.disable === true) {
               isFull = true
+              spotsLeft = null
               console.log(`Panel ${country}: disabled, marking as full`)
             }
             
@@ -85,13 +94,15 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
             if (panel.panel_traffic && panel.panel_data_usage && 
                 panel.panel_traffic <= panel.panel_data_usage) {
               isFull = true
+              spotsLeft = null
               console.log(`Panel ${country}: out of traffic, marking as full`)
             }
           }
           
           return {
             name: country,
-            isFull
+            isFull,
+            spotsLeft
           }
         })
         
@@ -147,12 +158,14 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
                 value={country.name}
                 disabled={country.isFull}
                 sx={{
+                  ...((country.isFull || (country.spotsLeft !== null && country.spotsLeft <= 20)) ? {
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                  } : {}),
                   ...(country.isFull ? {
                     opacity: 0.6,
                     backgroundColor: '#ffeeee !important',
                     color: '#888888',
-                    display: 'flex',
-                    justifyContent: 'space-between',
                     cursor: 'not-allowed'
                   } : {})
                 }}
@@ -169,6 +182,18 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
                     borderRadius: '3px',
                     background: '#fff0f0'
                   }}>FULL</span>
+                )}
+                {!country.isFull && country.spotsLeft !== null && country.spotsLeft <= 20 && (
+                  <span style={{ 
+                    marginLeft: '8px', 
+                    color: '#ff9800',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    padding: '2px 6px',
+                    border: '1px solid #ff9800',
+                    borderRadius: '3px',
+                    background: '#fff9e6'
+                  }}>{country.spotsLeft} LEFT</span>
                 )}
               </MenuItem>
             ))
