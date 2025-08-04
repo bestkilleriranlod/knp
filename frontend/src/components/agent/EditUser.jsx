@@ -212,32 +212,32 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             }
             
             // Calculate values based on selected plan
-            const dataLimit = panel_type === "AMN" ? 10000 : selectedPlan.dataLimit
+            const newDataLimit = panel_type === "AMN" ? 10000 : selectedPlan.dataLimit
             const daysToExpire = selectedPlan.days
             
             // Check how many days remain for the user and data usage
             const daysRemaining = item && item.expire ? timeStampToDay(item.expire) : 0
             const isExpired = daysRemaining <= 0
             
-            // Check data usage (for V2Ray)
-            const usedTrafficGB = item ? b2gb(item.used_traffic) : 0
-            const dataLimitGB = item ? b2gb(item.data_limit) : 0
-            const dataRemainingPercent = dataLimitGB > 0 ? (usedTrafficGB / dataLimitGB) * 100 : 0
-            const isDataDepleted = dataRemainingPercent >= 100
+            // Calculate data usage percentage
+            const dataUsed = item && item.used_traffic ? parseFloat(b2gb(item.used_traffic)) : 0
+            const currentDataLimit = item && item.data_limit ? parseFloat(b2gb(item.data_limit)) : 0
+            const dataUsagePercentage = currentDataLimit > 0 ? (dataUsed / currentDataLimit) * 100 : 0
+            const isDataExhausted = dataUsagePercentage >= 100
             
-            console.log("Days remaining:", daysRemaining, "Data usage:", usedTrafficGB + "/" + dataLimitGB + "GB", "(" + Math.round(dataRemainingPercent) + "%)")
+            console.log("Days remaining:", daysRemaining, "isExpired:", isExpired)
+            console.log("Data usage:", dataUsed, "GB of", currentDataLimit, "GB (", dataUsagePercentage.toFixed(2), "%)")
             
             // Determine if this is a reservation (add time) or renewal (reset)
-            // Reservation: Both time and data are still available
-            // Renewal: Either time or data is depleted
-            const isReservation = !isExpired && !isDataDepleted
+            // رزرو فقط در حالتی که کاربر هنوز زمان و حجم داشته باشد
+            const isReservation = !isExpired && !isDataExhausted && daysRemaining < 10
             const mode = isReservation ? "reservation" : "renewal"
-            console.log("Edit mode:", mode, "- Is expired:", isExpired, "- Is data depleted:", isDataDepleted)
+            console.log("Edit mode:", mode, "- Reason:", isExpired ? "Account expired" : isDataExhausted ? "Data exhausted" : daysRemaining >= 10 ? "More than 10 days remaining" : "Less than 10 days remaining")
             
             // Send parameters to server based on mode
             onEditItem(
                 item.id,
-                dataLimit,
+                newDataLimit,
                 daysToExpire,
                 item.country, // Always use the user's original country
                 selectedProtocols,
