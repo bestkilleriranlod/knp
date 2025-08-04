@@ -203,7 +203,8 @@ const CreateUser = ({ onClose, showForm }) => {
             return
         }
         
-        const username = document.getElementById("username").value
+        // Use the state value instead of directly accessing the DOM element
+        const username = usernameValue || document.getElementById("username").value // Fallback to DOM access if state is empty
         const panelType = expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"
         const data_limit = panelType === "AMN" ? 10000 : selectedPlan.dataLimit
         const expire = selectedPlan.days
@@ -271,8 +272,10 @@ const CreateUser = ({ onClose, showForm }) => {
 
     }
 
+    const [usernameValue, setUsernameValue] = useState("");
+    
     const formFields = [
-        { label: "Username", type: "text", id: "username", name: "username" },
+        { label: "Username", type: "username_with_refresh", id: "username", name: "username", onChange: (e) => setUsernameValue(e.target.value) },
         { label: "Ip Limit", type: "create_user_number", id: "ipLimit", name: "ipLimit", disabled: isIpLimitDisabled, value:ipLimitValue, onChange: (e) => setIpLimitValue(e.target.value) },
         { label: "Country", type: "multi-select2", id: "country", name: "country", onChange: setCountry },
         { label: "Description", type: "text", id: "desc", name: "desc" },
