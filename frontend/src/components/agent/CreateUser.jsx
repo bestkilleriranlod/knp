@@ -223,8 +223,13 @@ const CreateUser = ({ onClose, showForm }) => {
         // Since the protocols section is hidden, ensure protocols are set 
         // Make sure at least one protocol is selected
         if (selectedProtocols.length === 0) {
-            // Default to all available protocols based on panel type
-            getProtocols() // This will set the protocols based on the country
+            // Set default protocols based on panel type
+            if (panelType === "AMN") {
+                setSelectedProtocols(["amnezia"]) // Default protocol for AMN
+            } else {
+                // For V2Ray, set default protocols
+                setSelectedProtocols(["vmess", "vless", "trojan"])
+            }
         }
         
         createUserOnServer(username, data_limit, expire, country, desc, ip_limit)

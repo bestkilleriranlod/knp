@@ -206,8 +206,13 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                 if (item && item.inbounds) {
                     setSelectedProtocols(Object.keys(item.inbounds))
                 } else {
-                    // Default to available protocols
-                    getProtocols()
+                    // Set default protocols based on panel type
+                    if (panel_type === "AMN") {
+                        setSelectedProtocols(["amnezia"]) // Default protocol for AMN
+                    } else {
+                        // For V2Ray, set default protocols
+                        setSelectedProtocols(["vmess", "vless", "trojan"])
+                    }
                 }
             }
             
