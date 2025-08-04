@@ -14,6 +14,7 @@ import Button from '../Button'
 import Dropdown from '../Dropdown'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Checkbox from '@mui/material/Checkbox'
+import PlanSelection from '../form/inputs/PlanSelection'
 
 const flowOptions = [
     { label: "none", value: "none" },
@@ -45,6 +46,7 @@ const CreateUser = ({ onClose, showForm }) => {
     const [ipLimitValue, setIpLimitValue] = useState("")
     const [dataLimitValue, setDataLimitValue] = useState("")
     const [expireInputType, setExpireInputType] = useState("number")
+    const [selectedPlan, setSelectedPlan] = useState(null)
 
     const createUserOnServer = async (
         username, data_limit, expire, country,desc,ip_limit
@@ -110,29 +112,56 @@ const CreateUser = ({ onClose, showForm }) => {
             }
 
 
-            if(!panelInboundsObj.panel_type || panelInboundsObj.panel_type === "MZ")
+            const panelType = panelInboundsObj.panel_type || "MZ";
+            delete panelInboundsObj.panel_type;
+            
+            const availableProtocolsName = Object.keys(panelInboundsObj);
+            console.log("Available protocols:", availableProtocolsName);
+            
+            if(panelType === "MZ")
             {
                 setIsIpLimitDisabled(true)
                 setIsDataLimitDisabled(false)
                 setIpLimitValue(2)
                 setDataLimitValue("")
-                setExpireInputType("number")
+                setExpireInputType("plan_selection")
+                setSelectedProtocols(availableProtocolsName)
+                
+                // تنظیم پلن پیش‌فرض برای v2ray (فقط 30 روزه)
+                setSelectedPlan({
+                    days: 30,
+                    dataLimit: 30,
+                    cost: 30,
+                    label: `30 گیگ - 30 روز (30 واحد)`
+                });
             }
-
-            else if(panelInboundsObj.panel_type === "AMN")
+            else if(panelType === "AMN")
             {
                 setIsDataLimitDisabled(true)
                 setIsIpLimitDisabled(true)
                 setDataLimitValue(10000)
                 setIpLimitValue(5)
-                setExpireInputType("expire_selection")
+                setExpireInputType("plan_selection")
+                
+                // برای اکانت‌های امنزیا، پروتکل‌ها را به طور خودکار انتخاب می‌کنیم
+                setSelectedProtocols(availableProtocolsName)
+                
+                // محاسبه هزینه براساس AMNEZIA_COEFFICIENT و رند کردن به بالا
+                const AMNEZIA_COEFFICIENT = 2.3333; // مقدار یکسان با سرور
+                const calculateCost = (days) => {
+                    const exactCost = days * AMNEZIA_COEFFICIENT;
+                    return Math.ceil(exactCost); // رند به بالا
+                };
+                
+                // تنظیم پلن پیش‌فرض برای امنزیا
+                setSelectedPlan({
+                    days: 30,
+                    dataLimit: null,
+                    cost: calculateCost(30), // هزینه امنزیا با رند به بالا
+                    label: `30 Days (${calculateCost(30)} Units)`
+                });
+                setAmneziaDays(30)
             }
-
-            delete panelInboundsObj.panel_type;
-
-            const availableProtocolsName = Object.keys(panelInboundsObj);
-            console.log(availableProtocolsName)
-            setSelectedProtocols(availableProtocolsName)
             const updatedProtocols = protocols.map((protocol) => ({
                 name: protocol.name,
                 disabled: !availableProtocolsName.includes(protocol.name),
@@ -175,13 +204,30 @@ const CreateUser = ({ onClose, showForm }) => {
     }, [showForm])
 
     const handleSubmitForm = () => {
-        const username = document.getElementById("username").value
-        const data_limit = document.getElementById("dataLimit").value
-        const expire = expireInputType == "number" ? document.getElementById("daysToExpire").value : amneziaDays
+        if (!selectedPlan) {
+            setError_msg("Please select a plan")
+            setHasError(true)
+            return
+        }
+        
+        // Use the state value instead of directly accessing the DOM element
+        const username = usernameValue || document.getElementById("username").value // Fallback to DOM access if state is empty
+        const panelType = expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"
+        const data_limit = panelType === "AMN" ? 10000 : selectedPlan.dataLimit
+        const expire = selectedPlan.days
         const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
         const desc = document.getElementById("desc").value
-        const ip_limit = document.getElementById("ipLimit").value
-        createUserOnServer(username, data_limit, expire, country,desc,ip_limit)
+        // Use default IP limit values (field is hidden)
+        const ip_limit = panelType === "AMN" ? 5 : 2 // 5 for Amnezia, 2 for V2Ray
+        
+        // Since the protocols section is hidden, ensure protocols are set 
+        // Make sure at least one protocol is selected
+        if (selectedProtocols.length === 0) {
+            // Default to all available protocols based on panel type
+            getProtocols() // This will set the protocols based on the country
+        }
+        
+        createUserOnServer(username, data_limit, expire, country, desc, ip_limit)
     }
 
 
@@ -234,18 +280,17 @@ const CreateUser = ({ onClose, showForm }) => {
 
     }
 
+    const [usernameValue, setUsernameValue] = useState("");
+    
     const formFields = [
-        { label: "Username", type: "text", id: "username", name: "username" },
-        { label: "Data Limit", type: "create_user_number", id: "dataLimit", name: "dataLimit", disabled: isDataLimitDisabled, value:dataLimitValue, onChange: (e) => setDataLimitValue(e.target.value) },
-        { label: "Ip Limit", type: "create_user_number", id: "ipLimit", name: "ipLimit", disabled: isIpLimitDisabled, value:ipLimitValue, onChange: (e) => setIpLimitValue(e.target.value) },
-        { label: "Days To Expire", type: expireInputType, id: "daysToExpire", name: "daysToExpire" , onChange: setAmneziaDays, value: amneziaDays},
+        { label: "Username", type: "username_with_refresh", id: "username", name: "username", onChange: (e) => setUsernameValue(e.target.value) },
         { label: "Country", type: "multi-select2", id: "country", name: "country", onChange: setCountry },
         { label: "Description", type: "text", id: "desc", name: "desc" },
     ]
 
     const primaryButtons = [
         { label: "Cancel", className: "outlined", onClick: onClose },
-        { label: "Create User", className: "primary", onClick: handleSubmitForm, disabled: createMode, pendingText: "Creating..." }
+        { label: "Create User", className: "primary", onClick: handleSubmitForm, disabled: createMode || !country, pendingText: "Creating..." }
     ]
 
     const formHeader = (
@@ -285,120 +330,151 @@ const CreateUser = ({ onClose, showForm }) => {
                         {formHeader}
                         <main className={styles['modal__body']}>
                             <form className={styles['modal__form']}>
-                                {formFields.map((group, rowIndex) => (
-                                    <div key={rowIndex} className="flex gap-16">
-                                        {Array.isArray(group) ? group.map((field, index) => {
-                                            return (<FormField
-                                                key={index}
-                                                label={field.label}
-                                                type={field.type}
-                                                id={field.id}
-                                                name={field.name}
-                                                animateDelay={rowIndex * 0.1}
-                                                disabled={field.disabled}
-                                                options={field.options}
-                                                value={field.value}
-                                                defaultValue={field.defaultValue}
-                                                onChange={field.onChange}
-                                                placeholder={field.placeholder}
-                                            />)
-                                        }) : (
-                                            <FormField
-                                                key={rowIndex}
-                                                label={group.label}
-                                                type={group.type}
-                                                id={group.id}
-                                                name={group.name}
-                                                animateDelay={rowIndex * 0.1}
-                                                disabled={group.disabled}
-                                                options={group.options}
-                                                value={group.value}
-                                                defaultValue={group.defaultValue}
-                                                onChange={group.onChange}
-                                                placeholder={group.placeholder}
-                                            />
-                                        )}
-                                    </div>
-                                ))}
+                                {/* همیشه فیلد انتخاب کشور نمایش داده می‌شود */}
+                                <div className="flex gap-16">
+                                    <FormField
+                                        label="Country"
+                                        type="multi-select2"
+                                        id="country"
+                                        name="country"
+                                        onChange={setCountry}
+                                        animateDelay={0.1}
+                                    />
+                                </div>
 
-                            <FormControlLabel
-                                control={<Checkbox id="safu" name="safu"
-                                    defaultChecked={false} onChange={handle_safu_change}
-                                    sx={{marginLeft: "-9px",}}
-                                    />}
-                                label="Start after first use" />
+                                {/* سایر فیلدها فقط بعد از انتخاب کشور نمایش داده می‌شوند */}
+                                {country && (
+                                    <>
+                                        {formFields.filter(field => field.id !== "country").map((group, rowIndex) => (
+                                            <div key={rowIndex} className="flex gap-16">
+                                                {Array.isArray(group) ? group.map((field, index) => {
+                                                    return (<FormField
+                                                        key={index}
+                                                        label={field.label}
+                                                        type={field.type}
+                                                        id={field.id}
+                                                        name={field.name}
+                                                        animateDelay={rowIndex * 0.1}
+                                                        disabled={field.disabled}
+                                                        options={field.options}
+                                                        value={field.value}
+                                                        defaultValue={field.defaultValue}
+                                                        onChange={field.onChange}
+                                                        placeholder={field.placeholder}
+                                                    />)
+                                                }) : (
+                                                    <FormField
+                                                        key={rowIndex}
+                                                        label={group.label}
+                                                        type={group.type}
+                                                        id={group.id}
+                                                        name={group.name}
+                                                        animateDelay={rowIndex * 0.1}
+                                                        disabled={group.disabled}
+                                                        options={group.options}
+                                                        value={group.value}
+                                                        defaultValue={group.defaultValue}
+                                                        onChange={group.onChange}
+                                                        placeholder={group.placeholder}
+                                                    />
+                                                )}
+                                            </div>
+                                        ))}
 
+                                        <FormControlLabel
+                                            control={<Checkbox id="safu" name="safu"
+                                                defaultChecked={false} onChange={handle_safu_change}
+                                                sx={{marginLeft: "-9px",}}
+                                                />}
+                                            label="Start after first use" />
+                                    </>
+                                )}
+
+
+                            {/* کامپوننت انتخاب پلن */}
+                            {country && (
+                                <div className={styles['plan-section']}>
+                                    <PlanSelection 
+                                        panelType={expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"} 
+                                        onSelectPlan={setSelectedPlan} 
+                                        selectedPlan={selectedPlan}
+                                        availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0} // موجودی قابل اختصاص عامل
+                                    />
+                                </div>
+                            )}
 
                             </form>
-                            <div className={`${styles['protocols-section']}`}>
-                                <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
-                                <div className={`${styles.protocols}`}>
-                                    {protocols.map((protocol, index) => (
-                                        <motion.div key={index}
-                                            className={`${styles.protocol} ${selectedProtocols.includes(protocol.name) ? styles.selected : protocol.disabled ? styles.disabled : ''}`}
-                                            onClick={() => handleSelectProtocol(protocol)}
-                                        >
-                                            <div className="flex justify-between flex-col w-full">
-                                                <div className="flex justify-between">
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <h5 className={styles['protocol__name']}>{protocol.name}</h5>
-                                                        <p className={styles['protocol__description']}>{
-                                                            protocol.name === "vmess" ? "Fast And Secure" :
-                                                                protocol.name === "vless" ? "Lightweight, fast and secure" :
-                                                                    protocol.name === "trojan" ? "Lightweight, secure and lightening fast" :
-                                                                        protocol.name === "shadowsocks" ? "Fast, but not efficient as others" : ""
+                            {country && (
+                                <div className={`${styles['protocols-section']}`} style={{display: 'none'}}>
+                                    <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
+                                    <div className={`${styles.protocols}`}>
+                                        {protocols.map((protocol, index) => (
+                                            <motion.div key={index}
+                                                className={`${styles.protocol} ${selectedProtocols.includes(protocol.name) ? styles.selected : protocol.disabled ? styles.disabled : ''}`}
+                                                onClick={() => handleSelectProtocol(protocol)}
+                                            >
+                                                <div className="flex justify-between flex-col w-full">
+                                                    <div className="flex justify-between">
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <h5 className={styles['protocol__name']}>{protocol.name}</h5>
+                                                            <p className={styles['protocol__description']}>{
+                                                                protocol.name === "vmess" ? "Fast And Secure" :
+                                                                    protocol.name === "vless" ? "Lightweight, fast and secure" :
+                                                                        protocol.name === "trojan" ? "Lightweight, secure and lightening fast" :
+                                                                            protocol.name === "shadowsocks" ? "Fast, but not efficient as others" : ""
 
-                                                        }</p>
+                                                            }</p>
+                                                        </div>
+                                                        {selectedProtocols.includes(protocol.name) && <Button className="gray-100" onClick={(e) => handleClickMoreOption(e,index)}>
+                                                            <ThreeDotsIcon /></Button>}
                                                     </div>
-                                                    {selectedProtocols.includes(protocol.name) && <Button className="gray-100" onClick={(e) => handleClickMoreOption(e,index)}>
-                                                        <ThreeDotsIcon /></Button>}
-                                                </div>
-                                                <AnimatePresence>
-                                                    {selectedProtocols.includes(protocol.name) && isMoreOptionClicked[index] && (
-                                                        <motion.div
-                                                            className={styles['more-options']}
-                                                            initial={{ height: 0 }}
-                                                            animate={{ height: "auto" }}
-                                                            exit={{ height: 0 }}
-                                                        >
+                                                    <AnimatePresence>
+                                                        {selectedProtocols.includes(protocol.name) && isMoreOptionClicked[index] && (
+                                                            <motion.div
+                                                                className={styles['more-options']}
+                                                                initial={{ height: 0 }}
+                                                                animate={{ height: "auto" }}
+                                                                exit={{ height: 0 }}
+                                                            >
 
 
-                                                        {
-                                                            availableInbounds[protocol.name] && availableInbounds[protocol.name].length > 0 && (
-                                                                availableInbounds[protocol.name].map((inbound, index) => (
-                                                                    <div key={index} className='flex items-center gap-1' onClick={(e) => handleSelectInbound(e,protocol,inbound.tag)}  style={{height:'10px',marginTop:"10px"}} >
-                                                                    <FormControlLabel
-                                                                        control={<Checkbox id={inbound.tag.replaceAll(" ", "-")}
-                                                                             name={inbound.tag}
-                                                                            sx={{
-                                                                                marginLeft: "-9px",
-                                                                                marginRight: "-9px",
-                                                                                '& .MuiSvgIcon-root': { fontSize: 17 }
-                                                                            }}
-                                                                            checked={selectedInbounds[protocol.name].includes(inbound.tag)}
-                                                                            
-                                                                            
-                                                                            />}
-                                                                         /> <div className={`${selectedInbounds[protocol.name].includes(inbound.tag)?"":"striked_text"} inbound_tag`}>{inbound.tag}</div>
-                                                                    </div>
-                                                                ))
-                                                            )
-                                                        }
                                                             {
-                                                            protocol.name === "vless" && (
-                                                            <div className='flex flex-col gap-1.5' style={{ paddingTop: "1rem" }}>
-                                                                <h6 style={{ fontWeight: 400 }}>Flow</h6>
-                                                                <Dropdown options={flowOptions} onChange={handleSelectFlow} value={flowValue} />
-                                                            </div>
-                                                            )}
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-                                        </motion.div>
-                                    ))}
+                                                                availableInbounds[protocol.name] && availableInbounds[protocol.name].length > 0 && (
+                                                                    availableInbounds[protocol.name].map((inbound, index) => (
+                                                                        <div key={index} className='flex items-center gap-1' onClick={(e) => handleSelectInbound(e,protocol,inbound.tag)}  style={{height:'10px',marginTop:"10px"}} >
+                                                                        <FormControlLabel
+                                                                            control={<Checkbox id={inbound.tag.replaceAll(" ", "-")}
+                                                                                 name={inbound.tag}
+                                                                                sx={{
+                                                                                    marginLeft: "-9px",
+                                                                                    marginRight: "-9px",
+                                                                                    '& .MuiSvgIcon-root': { fontSize: 17 }
+                                                                                }}
+                                                                                checked={selectedInbounds[protocol.name].includes(inbound.tag)}
+                                                                                
+                                                                                
+                                                                                />}
+                                                                             /> <div className={`${selectedInbounds[protocol.name].includes(inbound.tag)?"":"striked_text"} inbound_tag`}>{inbound.tag}</div>
+                                                                        </div>
+                                                                    ))
+                                                                )
+                                                            }
+                                                                {
+                                                                protocol.name === "vless" && (
+                                                                <div className='flex flex-col gap-1.5' style={{ paddingTop: "1rem" }}>
+                                                                    <h6 style={{ fontWeight: 400 }}>Flow</h6>
+                                                                    <Dropdown options={flowOptions} onChange={handleSelectFlow} value={flowValue} />
+                                                                </div>
+                                                                )}
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                        </div>
                                 </div>
-                            </div>
+                            )}
                         </main>
                         {formFooter}
                     </Modal>

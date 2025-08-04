@@ -482,7 +482,17 @@ app.post("/create_user", async (req, res) => {
             else if(selected_panel.panel_type == "AMN") await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - expire * AMNEZIA_COEFFICIENT)});
             
 
-            await insert_to_logs(agent_id, "CREATE_USER", `created user !${username} with !${data_limit} GB data and !${expire} days of expire time on !${selected_panel.panel_name}`,access_token);
+            // Add more detailed log with panel type and cost (removed concurrent users)
+            const cost = selected_panel.panel_type == "AMN" ? 
+                Math.ceil(expire * AMNEZIA_COEFFICIENT) : 
+                data_limit;
+                
+            await insert_to_logs(
+                agent_id, 
+                "CREATE_USER", 
+                `created user !${username} with !${data_limit} GB data, !${expire} days of expire time on !${selected_panel.panel_name} (!${selected_panel.panel_type}). Cost: !${cost} units.`,
+                access_token
+            );
 
             res.send("DONE");
         }
@@ -540,16 +550,46 @@ app.post("/delete_user", async (req, res) => {
         
         if(panel_obj.panel_type == "MZ")
         {
-
-            if(process.env.RELEASE == "ALI")
-            {
-                if(user_obj.used_traffic == 0)
-                await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
-            }
-
-            else if(process.env.RELEASE != "REZA")
-            {
-                if( !(agent_obj.business_mode == 1 && (user_obj.used_traffic > user_obj.data_limit/4 || 7*86400 < (Math.floor(Date.now()/1000) - user_obj.created_at) )) ) await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+            // پیاده‌سازی منطق بازگشت وجه برای V2Ray مشابه امنزیا
+            // شرایط: کمتر از 150 مگابایت مصرف کرده باشد و کمتر از 7 روز گذشته باشد
+            
+            const usedTraffic = user_obj.used_traffic;
+            const creationTime = user_obj.created_at;
+            const currentTime = Math.floor(Date.now() / 1000);
+            const daysSinceCreation = Math.floor((currentTime - creationTime) / 86400);
+            const usedLessThan150MB = usedTraffic < gb2b(0.15);
+            const lessThan7DaysPassed = daysSinceCreation < 7;
+            
+            console.log(`Delete user - V2Ray refund check - Used traffic: ${b2gb(usedTraffic)} GB, Days since creation: ${daysSinceCreation}`);
+            
+            if (usedLessThan150MB && lessThan7DaysPassed) {
+                // محاسبه روزهای باقی‌مانده
+                const now = Math.floor(Date.now() / 1000);
+                const remainingDays = Math.max(0, Math.floor((user_obj.expire - now) / 86400));
+                
+                // محاسبه میزان بازگشت وجه بر اساس حجم باقی‌مانده (روزهای باقی‌مانده را در حجم روزانه ضرب می‌کنیم)
+                const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
+                const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
+                
+                // اعمال بازگشت وجه
+                await update_account(agent_obj.id, { 
+                    allocatable_data: format_number(agent_obj.allocatable_data + dataRefund)
+                });
+                
+                console.log(`Delete user - V2Ray refund granted - Remaining days: ${remainingDays}, Data refund: ${dataRefund} GB`);
+            } else {
+                // شرایط بازگشت وجه فراهم نیست
+                console.log(`Delete user - V2Ray refund denied - Used more than 150MB or more than 7 days passed`);
+                
+                // اگر منطق قبلی لازم بود حفظ شود، می‌توان اینجا نگه داشت
+                if(process.env.RELEASE == "ALI") {
+                    if(user_obj.used_traffic == 0)
+                    await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+                }
+                else if(process.env.RELEASE != "REZA") {
+                    if( !(agent_obj.business_mode == 1 && (user_obj.used_traffic > user_obj.data_limit/4 || 7*86400 < (Math.floor(Date.now()/1000) - user_obj.created_at) )) ) 
+                    await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+                }
             }
         }
 
@@ -564,8 +604,43 @@ app.post("/delete_user", async (req, res) => {
         }
 
         
+        // Prepare refund information for logs
+        let refundInfo = "";
+        const panelType = panel_obj.panel_type;
+        
+        // V2Ray refund info
+        if (panelType == "MZ") {
+            const usedLessThan150MB = user_obj.used_traffic < gb2b(0.15);
+            const lessThan7DaysPassed = Math.floor((Math.floor(Date.now() / 1000) - user_obj.created_at) / 86400) < 7;
+            
+            if (usedLessThan150MB && lessThan7DaysPassed) {
+                const remainingDays = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
+                const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
+                const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
+                refundInfo = `Refund granted: !${dataRefund} GB (${remainingDays} days remaining)`;
+            } else {
+                refundInfo = "No refund (usage > 150MB or account > 7 days old)";
+            }
+        }
+        
+        // Amnezia refund info
+        else if (panelType == "AMN") {
+            if (user_obj.used_traffic < gb2b(0.15)) {
+                const remainingDays = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
+                const amneziaCost = Math.ceil(remainingDays * AMNEZIA_COEFFICIENT);
+                refundInfo = `Refund granted: !${amneziaCost} units (${remainingDays} days remaining)`;
+            } else {
+                refundInfo = "No refund (usage > 150MB)";
+            }
+        }
+        
         await (await users_clct()).deleteOne({ username });
-        await insert_to_logs(agent_obj.id, "DELETE_USER", `deleted user !${username}`,access_token);
+        await insert_to_logs(
+            agent_obj.id, 
+            "DELETE_USER", 
+            `deleted user !${username} (!${panelType}). ${refundInfo}`,
+            access_token
+        );
         res.send("DONE");
     }
 
@@ -773,6 +848,8 @@ app.post("/edit_user", async (req, res) => {
         flow_status,
         desc,
         safu,
+        is_reset_data, // پارامتر جدید برای ریست کردن حجم
+        mode, // پارامتر جدید برای تشخیص حالت تمدید (renewal) یا رزرو (reservation)
          } = req.body;
 
         if(process.env.RELEASE == "ARMAN") flow_status = "xtls-rprx-vision";
@@ -790,9 +867,18 @@ app.post("/edit_user", async (req, res) => {
     var old_expire = Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400) + 1;
     var old_country = user_obj.country;
 
+    // برای دیباگ
+    console.log("Edit user - Agent countries:", corresponding_agent.country);
+    console.log("Edit user - Selected country:", country);
+    console.log("Edit user - Old country:", old_country);
+    
     if (corresponding_agent.disable) res.send({ status: "ERR", msg: "your account is disabled" })
     else if(!corresponding_agent.edit_access) res.send({ status: "ERR", msg: "access denied" })
-    else if (!corresponding_agent.country.split(",").includes(country)) res.send({ status: "ERR", msg: "country access denied" })
+    // اجازه تمدید کاربران در پنل‌های پر شده
+    else if (!corresponding_agent.country.split(",").includes(country) && country !== old_country) {
+        console.log("Country access denied: country not in allowed list and different from old country");
+        res.send({ status: "ERR", msg: "country access denied" })
+    }
     else if(b2gb(user_obj.used_traffic) > data_limit) res.send({ status: "ERR", msg: "data limit can't be reduced" })
     else if (panel_obj.panel_type != "AMN" &&  data_limit - old_data_limit > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
     else if (panel_obj.panel_type == "AMN" && expire * AMNEZIA_COEFFICIENT > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
@@ -819,8 +905,23 @@ app.post("/edit_user", async (req, res) => {
                 }
             }
 
+            // Log mode for debugging
+            console.log(`Edit user - Mode: ${mode}, Is reset data: ${is_reset_data}, Days to expire: ${expire}`);
+            
+            // Handle expire date based on mode
+            let newExpireTime;
+            if (mode === "reservation") {
+                // Reservation mode: Add days to current expire date
+                newExpireTime = user_obj.expire + (expire * 24 * 60 * 60);
+                console.log(`Edit user - Reservation mode: Adding ${expire} days to current expire date`);
+            } else {
+                // Renewal mode: Set a new expire date from now
+                newExpireTime = Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60;
+                console.log(`Edit user - Renewal mode: Setting new expire date to ${expire} days from now`);
+            }
+            
             await update_user(user_id, {
-                expire: Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60,
+                expire: newExpireTime,
                 data_limit: data_limit * ((2 ** 10) ** 3),
                 inbounds,
                 safu:/*safu?1:0*/0,
@@ -829,7 +930,34 @@ app.post("/edit_user", async (req, res) => {
 
             if(panel_obj.panel_type == "MZ")
             {
-                if(( 
+                if (mode === "reservation") {
+                    // Reservation mode for V2Ray (less than 10 days remaining)
+                    // 1. Add data to current data limit
+                    const newDataLimit = user_obj.data_limit + (data_limit * ((2 ** 10) ** 3));
+                    await update_user(user_id, { 
+                        data_limit: newDataLimit 
+                    });
+                    
+                    // 2. Deduct data from agent's allocatable data
+                    await update_account(corresponding_agent.id, { 
+                        allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
+                    });
+                    
+                    console.log(`Edit user - Reservation mode for V2Ray: Added ${data_limit} GB to current limit. New data limit: ${b2gb(newDataLimit)} GB`);
+                }
+                // Renewal mode
+                else if(is_reset_data) {
+                    // ریست کردن حجم استفاده شده
+                    await update_user(user_id, { used_traffic: 0 });
+                    
+                    // کسر اعتبار از حساب عامل
+                    await update_account(corresponding_agent.id, { 
+                        allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
+                    });
+                    
+                    console.log(`Edit user - Renewal mode for V2Ray: Reset data for user ${user_id}, deducted ${data_limit} GB`);
+                }
+                else if(( 
                     (corresponding_agent.business_mode == 1)
                     //(user_obj.used_traffic > user_obj.data_limit/4 || (user_obj.expire - user_obj.created_at) < (Math.floor(Date.now()/1000) - user_obj.created_at)*4 ) /*&&
                     //(old_data_limit > data_limit)
@@ -837,14 +965,23 @@ app.post("/edit_user", async (req, res) => {
             }
 
             else if(panel_obj.panel_type == "AMN") 
-            if(old_expire != expire)
             {
-                await update_account(corresponding_agent.id, 
-                { 
-                    allocatable_data: format_number(corresponding_agent.allocatable_data - AMNEZIA_COEFFICIENT * expire),
+                // در امنزیا فقط مقدار هزینه بر اساس روزهای پلن محاسبه می‌شود
+                const cost = AMNEZIA_COEFFICIENT * expire;
+                
+                if (mode === "reservation") {
+                    // Reservation mode for Amnezia (no traffic reset, just add time)
+                    console.log(`Edit user - Reservation mode for Amnezia: Adding ${expire} days, deducting ${cost} units`);
+                } else {
+                    // Renewal mode for Amnezia (reset traffic)
+                    await update_user(user_id, { used_traffic: 0 });
+                    console.log(`Edit user - Renewal mode for Amnezia: Reset traffic, adding ${expire} days, deducting ${cost} units`);
+                }
+                
+                // در هر حالت، هزینه از حساب عامل کسر می‌شود
+                await update_account(corresponding_agent.id, { 
+                    allocatable_data: format_number(corresponding_agent.allocatable_data - cost),
                 });
-
-                await update_user(user_id, { used_traffic: 0 });
             }
 
 
@@ -852,7 +989,21 @@ app.post("/edit_user", async (req, res) => {
             var account = await token_to_account(access_token);
 
 
-            await insert_to_logs(account.id, "EDIT_USER", `edited user !${user_obj.username} with !${data_limit} GB data and !${expire} days of expire time`,access_token);
+            // Add more detailed log with panel type, mode (renewal/reservation), IP limit and cost
+            const panelType = panel_obj.panel_type;
+            const cost = panelType == "AMN" ? 
+                Math.ceil(expire * AMNEZIA_COEFFICIENT) : 
+                data_limit;
+            
+            let modeInfo = mode || "renewal"; // Default to renewal if mode not specified
+            let resetInfo = is_reset_data ? "with data usage reset" : "without data usage reset";
+                
+            await insert_to_logs(
+                account.id, 
+                "EDIT_USER", 
+                `${modeInfo} of user !${user_obj.username} with !${data_limit} GB data and !${expire} days of expire time (!${panelType}) ${resetInfo}. Cost: !${cost} units.`,
+                access_token
+            );
             if(old_country == country) 
             {
                 if(user_obj.protocols != protocols || user_obj.flow_status != flow_status) update_user_links_bg(panel_obj.panel_url,panel_obj.panel_username,panel_obj.panel_password,user_obj.username,user_obj.id)
@@ -943,11 +1094,27 @@ app.post("/reset_user", async (req, res) => {
 
 
 
+        // Calculate cost based on panel type
+        const panelType = panel_obj.panel_type;
+        const cost = panelType == "AMN" ? 
+            Math.ceil(Math.floor((user_obj.expire - user_obj.created_at) / 86400) * AMNEZIA_COEFFICIENT) : 
+            b2gb(user_obj.data_limit);
+        
+        // Get data usage information before reset
+        const dataUsedGB = b2gb(user_obj.used_traffic);
+        const dataLimitGB = b2gb(user_obj.data_limit);
+        const usagePercent = Math.round((dataUsedGB / dataLimitGB) * 100);
+        
         await update_user(user_id, { used_traffic: 0 });
         if(user_obj.status=="limited") await update_user(user_id, { status: "active" });
 
         var account = await token_to_account(access_token);
-        await insert_to_logs(account.id, "RESET_USER", `reseted user !${user_obj.username}`,access_token);
+        await insert_to_logs(
+            account.id, 
+            "RESET_USER", 
+            `reset data usage for user !${user_obj.username} (!${panelType}). Previous usage: !${dataUsedGB} GB out of !${dataLimitGB} GB (${usagePercent}%). Cost: !${cost} units.`,
+            access_token
+        );
         res.send("DONE");
     }
 });
@@ -969,7 +1136,18 @@ app.post("/unlock_user", async (req, res) => {
         if (result == "ERR") {res.send({ status: "ERR", msg: "failed to connect to marzban" });return;}
 
         var account = await token_to_account(access_token);
-        await insert_to_logs(account.id, "UNLOCK_USER", `unlocked user !${user_obj.username}`,access_token);
+        
+        // Add panel type and user status details to the log
+        const panelType = panel_obj.panel_type;
+        const userStatus = user_obj.status || "unknown";
+        const daysRemaining = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
+        
+        await insert_to_logs(
+            account.id, 
+            "UNLOCK_USER", 
+            `unlocked user !${user_obj.username} (!${panelType}) with status !${userStatus}. Days remaining: !${daysRemaining}.`,
+            access_token
+        );
         res.send("DONE");
     }
 

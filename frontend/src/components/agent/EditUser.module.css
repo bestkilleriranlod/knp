@@ -27,8 +27,16 @@
 }
 
 .modal__form,
-.protocols-section {
+.protocols-section,
+.plan-section {
     width: 100%;
+}
+
+.plan-section {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    border-top: 1px solid var(--gray-clr-100);
+    padding-top: 15px;
 }
 
 .protocols {
