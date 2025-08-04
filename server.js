@@ -774,6 +774,7 @@ app.post("/edit_user", async (req, res) => {
         desc,
         safu,
         is_reset_data, // پارامتر جدید برای ریست کردن حجم
+        mode, // پارامتر جدید برای تشخیص حالت تمدید (renewal) یا رزرو (reservation)
          } = req.body;
 
         if(process.env.RELEASE == "ARMAN") flow_status = "xtls-rprx-vision";
@@ -829,8 +830,23 @@ app.post("/edit_user", async (req, res) => {
                 }
             }
 
+            // Log mode for debugging
+            console.log(`Edit user - Mode: ${mode}, Is reset data: ${is_reset_data}, Days to expire: ${expire}`);
+            
+            // Handle expire date based on mode
+            let newExpireTime;
+            if (mode === "reservation") {
+                // Reservation mode: Add days to current expire date
+                newExpireTime = user_obj.expire + (expire * 24 * 60 * 60);
+                console.log(`Edit user - Reservation mode: Adding ${expire} days to current expire date`);
+            } else {
+                // Renewal mode: Set a new expire date from now
+                newExpireTime = Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60;
+                console.log(`Edit user - Renewal mode: Setting new expire date to ${expire} days from now`);
+            }
+            
             await update_user(user_id, {
-                expire: Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60,
+                expire: newExpireTime,
                 data_limit: data_limit * ((2 ** 10) ** 3),
                 inbounds,
                 safu:/*safu?1:0*/0,
@@ -839,8 +855,23 @@ app.post("/edit_user", async (req, res) => {
 
             if(panel_obj.panel_type == "MZ")
             {
-                // اگر is_reset_data فعال باشد یا پلن انتخاب شده باشد، حجم مصرفی را ریست کن
-                if(is_reset_data) {
+                if (mode === "reservation") {
+                    // Reservation mode for V2Ray (less than 10 days remaining)
+                    // 1. Add data to current data limit
+                    const newDataLimit = user_obj.data_limit + (data_limit * ((2 ** 10) ** 3));
+                    await update_user(user_id, { 
+                        data_limit: newDataLimit 
+                    });
+                    
+                    // 2. Deduct data from agent's allocatable data
+                    await update_account(corresponding_agent.id, { 
+                        allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
+                    });
+                    
+                    console.log(`Edit user - Reservation mode for V2Ray: Added ${data_limit} GB to current limit. New data limit: ${b2gb(newDataLimit)} GB`);
+                }
+                // Renewal mode
+                else if(is_reset_data) {
                     // ریست کردن حجم استفاده شده
                     await update_user(user_id, { used_traffic: 0 });
                     
@@ -849,7 +880,7 @@ app.post("/edit_user", async (req, res) => {
                         allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
                     });
                     
-                    console.log(`Edit user - Reset data for user ${user_id}, deducted ${data_limit} GB`);
+                    console.log(`Edit user - Renewal mode for V2Ray: Reset data for user ${user_id}, deducted ${data_limit} GB`);
                 }
                 else if(( 
                     (corresponding_agent.business_mode == 1)
@@ -859,14 +890,23 @@ app.post("/edit_user", async (req, res) => {
             }
 
             else if(panel_obj.panel_type == "AMN") 
-            if(old_expire != expire)
             {
-                await update_account(corresponding_agent.id, 
-                { 
-                    allocatable_data: format_number(corresponding_agent.allocatable_data - AMNEZIA_COEFFICIENT * expire),
+                // در امنزیا فقط مقدار هزینه بر اساس روزهای پلن محاسبه می‌شود
+                const cost = AMNEZIA_COEFFICIENT * expire;
+                
+                if (mode === "reservation") {
+                    // Reservation mode for Amnezia (no traffic reset, just add time)
+                    console.log(`Edit user - Reservation mode for Amnezia: Adding ${expire} days, deducting ${cost} units`);
+                } else {
+                    // Renewal mode for Amnezia (reset traffic)
+                    await update_user(user_id, { used_traffic: 0 });
+                    console.log(`Edit user - Renewal mode for Amnezia: Reset traffic, adding ${expire} days, deducting ${cost} units`);
+                }
+                
+                // در هر حالت، هزینه از حساب عامل کسر می‌شود
+                await update_account(corresponding_agent.id, { 
+                    allocatable_data: format_number(corresponding_agent.allocatable_data - cost),
                 });
-
-                await update_user(user_id, { used_traffic: 0 });
             }
 
 

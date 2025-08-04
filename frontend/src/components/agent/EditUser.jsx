@@ -206,21 +206,31 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             }
             
             // Calculate values based on selected plan
-                const dataLimit = panel_type === "AMN" ? 10000 : selectedPlan.dataLimit
-                const daysToExpire = selectedPlan.days
-                
-                // Send is_reset_data=true parameter to reset data usage during renewal
-                onEditItem(
-                    item.id,
-                    dataLimit,
-                    daysToExpire,
-                    item.country, // Always use the user's original country
-                    selectedProtocols,
-                    flowValue.value,
-                    document.getElementById("desc").value,
-                    safu,
-                    true // is_reset_data=true for automatic data usage reset during renewal
-                )
+            const dataLimit = panel_type === "AMN" ? 10000 : selectedPlan.dataLimit
+            const daysToExpire = selectedPlan.days
+            
+            // Check how many days remain for the user
+            const daysRemaining = item && item.expire ? timeStampToDay(item.expire) : 0
+            console.log("Days remaining:", daysRemaining)
+            
+            // Determine if this is a reservation (add time) or renewal (reset)
+            const isReservation = daysRemaining < 10
+            const mode = isReservation ? "reservation" : "renewal"
+            console.log("Edit mode:", mode, "- Days remaining:", daysRemaining)
+            
+            // Send parameters to server based on mode
+            onEditItem(
+                item.id,
+                dataLimit,
+                daysToExpire,
+                item.country, // Always use the user's original country
+                selectedProtocols,
+                flowValue.value,
+                document.getElementById("desc").value,
+                safu,
+                !isReservation, // is_reset_data=true only if it's a renewal (not reservation)
+                mode // new parameter to indicate mode to server
+            )
             },
             disabled: editMode,
             pendingText: "Editing..."
