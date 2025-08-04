@@ -103,13 +103,13 @@ const FormField = ({
     if (type === "username_with_refresh") {
         // Function to generate a random username
         const generateRandomUsername = () => {
-            // Generate a random string of 8 characters
-            const randomString = Math.random().toString(36).substring(2, 8);
-            // Set the input value
-            document.getElementById(id).value = `user_${randomString}`;
+            // Generate a random number string (8 digits)
+            const randomDigits = Math.floor(10000000 + Math.random() * 90000000).toString();
+            // Set the input value (without user_ prefix, just numbers)
+            document.getElementById(id).value = randomDigits;
             // If onChange is provided, call it with the new value
             if (onChange) {
-                const event = { target: { value: `user_${randomString}` } };
+                const event = { target: { value: randomDigits } };
                 onChange(event);
             }
         }
@@ -131,19 +131,20 @@ const FormField = ({
                     <button 
                         type="button" 
                         onClick={generateRandomUsername}
+                        className="outlined refresh-icon"
                         style={{
                             width: '40px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            background: 'var(--primary-clr-100)',
-                            border: 'none',
+                            border: '1px solid var(--border-clr)',
+                            borderLeft: 'none',
                             borderTopRightRadius: '4px',
                             borderBottomRightRadius: '4px',
                             cursor: 'pointer'
                         }}
                     >
-                        <RefreshIcon style={{ fill: 'white', width: '16px', height: '16px' }} />
+                        <RefreshIcon />
                     </button>
                 </div>
             </motion.div>
