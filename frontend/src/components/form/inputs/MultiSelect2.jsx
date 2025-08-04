@@ -7,14 +7,27 @@ import Select from '@mui/material/Select'
 import axios from 'axios'
 
 export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
+  // برای نمایش خطا
+  const [errorMessage, setErrorMessage] = useState('')
   const [age, setAge] = useState(defaultValue)
   const [countries, setCountries] = useState([])
   const [isLoading, setIsLoading] = useState(false)
 
   const handleChange = (event) => {
-    setAge(event.target.value)
+    const selectedValue = event.target.value
+    const selectedCountry = countries.find(c => c.name === selectedValue)
+    
+    // اگر کشور انتخابی پر شده باشد، خطا نمایش داده شود
+    if (selectedCountry && selectedCountry.isFull) {
+      setErrorMessage(`کشور ${selectedValue} ظرفیت کامل دارد و قابل انتخاب نیست`)
+      return
+    }
+    
+    // در غیر این صورت، مقدار انتخابی را تنظیم کن
+    setErrorMessage('')
+    setAge(selectedValue)
     if (onChange) {
-      onChange(event.target.value)
+      onChange(selectedValue)
     }
   }
 
@@ -32,10 +45,12 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
         // دریافت پنل‌ها برای بررسی ظرفیت
         const panelsResponse = await axios.post("/get_panels", { access_token })
         const panels = Array.isArray(panelsResponse.data) ? panelsResponse.data : []
+        console.log('Panels data received:', panels)
         
         // دریافت کاربران برای بررسی تعداد کاربران هر کشور
         const usersResponse = await axios.post("/get_users", { access_token })
         const users = usersResponse.data && usersResponse.data.obj_arr ? usersResponse.data.obj_arr : []
+        console.log('Users data received:', users)
         
         // محاسبه تعداد کاربران هر کشور
         const countryUsersCount = {}
@@ -54,19 +69,23 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
           let isFull = false
           
           if (panel) {
-            // اگر panel_user_max_count وجود داشته باشد از آن استفاده می‌کنیم
-            if (panel.panel_user_max_count) {
-              const usersCount = countryUsersCount[country] || 0
-              isFull = usersCount >= panel.panel_user_max_count
-            } 
-            // اگر active_users وجود داشته باشد از آن استفاده می‌کنیم
-            else if (panel.active_users !== undefined && panel.panel_user_max_count !== undefined) {
-              isFull = panel.active_users >= panel.panel_user_max_count
+            // بررسی پر بودن پنل با استفاده از total_users و panel_user_max_count
+            if (panel.total_users !== undefined && panel.panel_user_max_count) {
+              isFull = panel.total_users >= panel.panel_user_max_count
+              console.log(`Panel ${country}: total_users=${panel.total_users}, max=${panel.panel_user_max_count}, isFull=${isFull}`)
             }
             
-            // اگر پنل غیرفعال است، کشور پر در نظر گرفته می‌شود
+            // بررسی غیرفعال بودن پنل
             if (panel.disable === true) {
               isFull = true
+              console.log(`Panel ${country}: disabled, marking as full`)
+            }
+            
+            // بررسی اتمام ترافیک پنل
+            if (panel.panel_traffic && panel.panel_data_usage && 
+                panel.panel_traffic <= panel.panel_data_usage) {
+              isFull = true
+              console.log(`Panel ${country}: out of traffic, marking as full`)
             }
           }
           
@@ -76,6 +95,7 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
           }
         })
         
+        console.log('Final countries status:', countriesWithStatus)
         setCountries(countriesWithStatus)
       } catch (error) {
         console.error("Error fetching countries data:", error)
@@ -97,7 +117,20 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
 
   return (
     <Box sx={{ width: '100%' }}>
-      <FormControl fullWidth>
+      {errorMessage && (
+        <div style={{ 
+          color: 'red', 
+          fontSize: '12px', 
+          marginBottom: '4px',
+          padding: '4px',
+          backgroundColor: '#fff0f0',
+          borderRadius: '4px',
+          border: '1px solid #ffcccc'
+        }}>
+          {errorMessage}
+        </div>
+      )}
+      <FormControl fullWidth error={!!errorMessage}>
         <InputLabel id="demo-simple-select-label">{isLoading ? 'Loading...' : ''}</InputLabel>
         <Select sx={{ height: 34 }}
           labelId="demo-simple-select-label"
@@ -113,24 +146,29 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
                 key={country.name} 
                 value={country.name}
                 disabled={country.isFull}
-                sx={country.isFull ? { 
-                  opacity: 0.6, 
-                  '&:hover': { backgroundColor: 'transparent' },
-                  display: 'flex',
-                  justifyContent: 'space-between'
-                } : {}}
+                sx={{
+                  ...(country.isFull ? {
+                    opacity: 0.6,
+                    backgroundColor: '#ffeeee !important',
+                    color: '#888888',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    cursor: 'not-allowed'
+                  } : {})
+                }}
               >
                 {country.name}
                 {country.isFull && (
                   <span style={{ 
                     marginLeft: '8px', 
                     color: '#ff5252',
-                    fontSize: '12px',
+                    fontSize: '10px',
                     fontWeight: 'bold',
-                    padding: '1px 4px',
+                    padding: '2px 6px',
                     border: '1px solid #ff5252',
-                    borderRadius: '3px'
-                  }}>Full</span>
+                    borderRadius: '3px',
+                    background: '#fff0f0'
+                  }}>FULL</span>
                 )}
               </MenuItem>
             ))
