@@ -540,16 +540,46 @@ app.post("/delete_user", async (req, res) => {
         
         if(panel_obj.panel_type == "MZ")
         {
-
-            if(process.env.RELEASE == "ALI")
-            {
-                if(user_obj.used_traffic == 0)
-                await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
-            }
-
-            else if(process.env.RELEASE != "REZA")
-            {
-                if( !(agent_obj.business_mode == 1 && (user_obj.used_traffic > user_obj.data_limit/4 || 7*86400 < (Math.floor(Date.now()/1000) - user_obj.created_at) )) ) await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+            // پیاده‌سازی منطق بازگشت وجه برای V2Ray مشابه امنزیا
+            // شرایط: کمتر از 150 مگابایت مصرف کرده باشد و کمتر از 7 روز گذشته باشد
+            
+            const usedTraffic = user_obj.used_traffic;
+            const creationTime = user_obj.created_at;
+            const currentTime = Math.floor(Date.now() / 1000);
+            const daysSinceCreation = Math.floor((currentTime - creationTime) / 86400);
+            const usedLessThan150MB = usedTraffic < gb2b(0.15);
+            const lessThan7DaysPassed = daysSinceCreation < 7;
+            
+            console.log(`Delete user - V2Ray refund check - Used traffic: ${b2gb(usedTraffic)} GB, Days since creation: ${daysSinceCreation}`);
+            
+            if (usedLessThan150MB && lessThan7DaysPassed) {
+                // محاسبه روزهای باقی‌مانده
+                const now = Math.floor(Date.now() / 1000);
+                const remainingDays = Math.max(0, Math.floor((user_obj.expire - now) / 86400));
+                
+                // محاسبه میزان بازگشت وجه بر اساس حجم باقی‌مانده (روزهای باقی‌مانده را در حجم روزانه ضرب می‌کنیم)
+                const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
+                const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
+                
+                // اعمال بازگشت وجه
+                await update_account(agent_obj.id, { 
+                    allocatable_data: format_number(agent_obj.allocatable_data + dataRefund)
+                });
+                
+                console.log(`Delete user - V2Ray refund granted - Remaining days: ${remainingDays}, Data refund: ${dataRefund} GB`);
+            } else {
+                // شرایط بازگشت وجه فراهم نیست
+                console.log(`Delete user - V2Ray refund denied - Used more than 150MB or more than 7 days passed`);
+                
+                // اگر منطق قبلی لازم بود حفظ شود، می‌توان اینجا نگه داشت
+                if(process.env.RELEASE == "ALI") {
+                    if(user_obj.used_traffic == 0)
+                    await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+                }
+                else if(process.env.RELEASE != "REZA") {
+                    if( !(agent_obj.business_mode == 1 && (user_obj.used_traffic > user_obj.data_limit/4 || 7*86400 < (Math.floor(Date.now()/1000) - user_obj.created_at) )) ) 
+                    await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+                }
             }
         }
 
