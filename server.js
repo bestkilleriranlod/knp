@@ -563,20 +563,44 @@ app.post("/delete_user", async (req, res) => {
             console.log(`Delete user - V2Ray refund check - Used traffic: ${b2gb(usedTraffic)} GB, Days since creation: ${daysSinceCreation}`);
             
             if (usedLessThan150MB && lessThan7DaysPassed) {
-                // محاسبه روزهای باقی‌مانده
                 const now = Math.floor(Date.now() / 1000);
-                const remainingDays = Math.max(0, Math.floor((user_obj.expire - now) / 86400));
                 
-                // محاسبه میزان بازگشت وجه بر اساس حجم باقی‌مانده (روزهای باقی‌مانده را در حجم روزانه ضرب می‌کنیم)
-                const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
-                const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
-                
-                // اعمال بازگشت وجه
-                await update_account(agent_obj.id, { 
-                    allocatable_data: format_number(agent_obj.allocatable_data + dataRefund)
-                });
-                
-                console.log(`Delete user - V2Ray refund granted - Remaining days: ${remainingDays}, Data refund: ${dataRefund} GB`);
+                // Check if user has reservation data (for reserved plans)
+                if (user_obj.reservation_data) {
+                    console.log("Delete user - V2Ray reservation detected");
+                    
+                    const reservationStart = user_obj.reservation_data.reservation_time;
+                    const addedDataGB = user_obj.reservation_data.added_data_gb || 0;
+                    const addedDays = user_obj.reservation_data.added_days || 0;
+                    
+                    // Calculate what percentage of the reservation has been used (by time or by data)
+                    const daysSinceReservation = Math.floor((now - reservationStart) / 86400);
+                    const usedDaysPercent = Math.min(100, Math.max(0, (daysSinceReservation / addedDays) * 100));
+                    const usedDataPercent = Math.min(100, Math.max(0, (user_obj.used_traffic / user_obj.data_limit) * 100));
+                    
+                    // Use the higher percentage as "used" - this prevents abuse by refunding based on whichever is lower
+                    const unusedDataPercent = 100 - Math.max(usedDaysPercent, usedDataPercent);
+                    const dataRefundGB = Math.floor((unusedDataPercent / 100) * addedDataGB);
+                    
+                    // Refund only the unused portion of the added data
+                    await update_account(agent_obj.id, { 
+                        allocatable_data: format_number(agent_obj.allocatable_data + dataRefundGB)
+                    });
+                    
+                    console.log(`Delete user - V2Ray reservation refund: ${dataRefundGB} GB (${Math.round(unusedDataPercent)}% unused of added ${addedDataGB} GB)`);
+                } else {
+                    // Standard refund calculation for regular users
+                    const remainingDays = Math.max(0, Math.floor((user_obj.expire - now) / 86400));
+                    const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
+                    const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
+                    
+                    // Apply standard refund
+                    await update_account(agent_obj.id, { 
+                        allocatable_data: format_number(agent_obj.allocatable_data + dataRefund)
+                    });
+                    
+                    console.log(`Delete user - V2Ray refund granted - Remaining days: ${remainingDays}, Data refund: ${dataRefund} GB`);
+                }
             } else {
                 // شرایط بازگشت وجه فراهم نیست
                 console.log(`Delete user - V2Ray refund denied - Used more than 150MB or more than 7 days passed`);
@@ -598,8 +622,31 @@ app.post("/delete_user", async (req, res) => {
             if(user_obj.used_traffic < gb2b(0.15))
             {
                 const now = Math.floor(Date.now()/1000);
-                const remaining_days = Math.max(0, Math.floor((user_obj.expire - now)/86400));
-                await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + remaining_days * AMNEZIA_COEFFICIENT )});
+                
+                // Check if user has reservation data
+                if (user_obj.reservation_data) {
+                    console.log("Delete user - Amnezia reservation detected");
+                    
+                    // Only refund days from the time of reservation to expiry
+                    // Not including the days that were already there before reservation
+                    const reservationStart = user_obj.reservation_data.reservation_time;
+                    const addedDays = user_obj.reservation_data.added_days || 0;
+                    const daysSinceReservation = Math.floor((now - reservationStart) / 86400);
+                    const unusedAddedDays = Math.max(0, addedDays - daysSinceReservation);
+                    
+                    console.log(`Delete user - Amnezia reservation data: Added ${addedDays} days, Used ${daysSinceReservation} days, Refunding ${unusedAddedDays} days`);
+                    
+                    // Refund only the unused portion of the added days
+                    await update_account(agent_obj.id, { 
+                        allocatable_data: format_number(agent_obj.allocatable_data + unusedAddedDays * AMNEZIA_COEFFICIENT)
+                    });
+                } else {
+                    // Standard refund for non-reservation
+                    const remaining_days = Math.max(0, Math.floor((user_obj.expire - now)/86400));
+                    await update_account(agent_obj.id, { 
+                        allocatable_data: format_number(agent_obj.allocatable_data + remaining_days * AMNEZIA_COEFFICIENT)
+                    });
+                }
             }
         }
 
@@ -614,10 +661,29 @@ app.post("/delete_user", async (req, res) => {
             const lessThan7DaysPassed = Math.floor((Math.floor(Date.now() / 1000) - user_obj.created_at) / 86400) < 7;
             
             if (usedLessThan150MB && lessThan7DaysPassed) {
-                const remainingDays = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
-                const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
-                const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
-                refundInfo = `Refund granted: !${dataRefund} GB (${remainingDays} days remaining)`;
+                const now = Math.floor(Date.now() / 1000);
+                
+                // Check if user has reservation data (for reserved plans)
+                if (user_obj.reservation_data) {
+                    const reservationStart = user_obj.reservation_data.reservation_time;
+                    const addedDataGB = user_obj.reservation_data.added_data_gb || 0;
+                    const addedDays = user_obj.reservation_data.added_days || 0;
+                    const daysSinceReservation = Math.floor((now - reservationStart) / 86400);
+                    const usedDaysPercent = Math.min(100, Math.max(0, (daysSinceReservation / addedDays) * 100));
+                    const usedDataPercent = Math.min(100, Math.max(0, (user_obj.used_traffic / user_obj.data_limit) * 100));
+                    
+                    // Refund proportionally to unused data in reservation
+                    const unusedDataPercent = 100 - Math.max(usedDaysPercent, usedDataPercent);
+                    const dataRefundGB = Math.floor((unusedDataPercent / 100) * addedDataGB);
+                    
+                    refundInfo = `Reservation refund: !${dataRefundGB} GB (${Math.round(unusedDataPercent)}% unused)`;
+                } else {
+                    // Standard refund
+                    const remainingDays = Math.max(0, Math.floor((user_obj.expire - now) / 86400));
+                    const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
+                    const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
+                    refundInfo = `Refund granted: !${dataRefund} GB (${remainingDays} days remaining)`;
+                }
             } else {
                 refundInfo = "No refund (usage > 150MB or account > 7 days old)";
             }
@@ -626,9 +692,23 @@ app.post("/delete_user", async (req, res) => {
         // Amnezia refund info
         else if (panelType == "AMN") {
             if (user_obj.used_traffic < gb2b(0.15)) {
-                const remainingDays = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
-                const amneziaCost = Math.ceil(remainingDays * AMNEZIA_COEFFICIENT);
-                refundInfo = `Refund granted: !${amneziaCost} units (${remainingDays} days remaining)`;
+                const now = Math.floor(Date.now() / 1000);
+                
+                // Check if user has reservation data
+                if (user_obj.reservation_data) {
+                    const reservationStart = user_obj.reservation_data.reservation_time;
+                    const addedDays = user_obj.reservation_data.added_days || 0;
+                    const daysSinceReservation = Math.floor((now - reservationStart) / 86400);
+                    const unusedAddedDays = Math.max(0, addedDays - daysSinceReservation);
+                    const amneziaCost = Math.ceil(unusedAddedDays * AMNEZIA_COEFFICIENT);
+                    
+                    refundInfo = `Reservation refund: !${amneziaCost} units (${unusedAddedDays} of ${addedDays} added days unused)`;
+                } else {
+                    // Standard refund
+                    const remainingDays = Math.max(0, Math.floor((user_obj.expire - now) / 86400));
+                    const amneziaCost = Math.ceil(remainingDays * AMNEZIA_COEFFICIENT);
+                    refundInfo = `Refund granted: !${amneziaCost} units (${remainingDays} days remaining)`;
+                }
             } else {
                 refundInfo = "No refund (usage > 150MB)";
             }
@@ -931,26 +1011,46 @@ app.post("/edit_user", async (req, res) => {
             if(panel_obj.panel_type == "MZ")
             {
                 if (mode === "reservation") {
-                    // Reservation mode for V2Ray (less than 10 days remaining)
-                    // 1. Add data to current data limit
-                    const newDataLimit = user_obj.data_limit + (data_limit * ((2 ** 10) ** 3));
+                    // Reservation mode for V2Ray (both time and data remaining)
+                    
+                    // Calculate remaining data
+                    const usedTraffic = user_obj.used_traffic;
+                    const remainingDataBytes = Math.max(0, user_obj.data_limit - usedTraffic);
+                    const remainingDataGB = b2gb(remainingDataBytes);
+                    
+                    // Reset usage and add remaining data to new plan data
+                    const newDataLimit = (data_limit + remainingDataGB) * ((2 ** 10) ** 3);
+                    
+                    // Record original data and expiry for refund calculations
+                    const reservationStartTime = Math.floor(Date.now() / 1000);
                     await update_user(user_id, { 
-                        data_limit: newDataLimit 
+                        used_traffic: 0,
+                        data_limit: newDataLimit,
+                        reservation_data: {
+                            original_expire: user_obj.expire, 
+                            original_data_limit: user_obj.data_limit,
+                            reservation_time: reservationStartTime,
+                            added_data_gb: data_limit,
+                            added_days: expire
+                        }
                     });
                     
-                    // 2. Deduct data from agent's allocatable data
+                    // Deduct data from agent's allocatable data
                     await update_account(corresponding_agent.id, { 
                         allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
                     });
                     
-                    console.log(`Edit user - Reservation mode for V2Ray: Added ${data_limit} GB to current limit. New data limit: ${b2gb(newDataLimit)} GB`);
+                    console.log(`Edit user - Reservation mode for V2Ray: Reset usage, kept remaining ${remainingDataGB} GB and added ${data_limit} GB. New data limit: ${b2gb(newDataLimit)} GB`);
                 }
                 // Renewal mode
                 else if(is_reset_data) {
-                    // ریست کردن حجم استفاده شده
-                    await update_user(user_id, { used_traffic: 0 });
+                    // Clear all reservation data since this is a full renewal
+                    await update_user(user_id, { 
+                        used_traffic: 0,
+                        reservation_data: null 
+                    });
                     
-                    // کسر اعتبار از حساب عامل
+                    // Deduct cost from agent's allocatable data
                     await update_account(corresponding_agent.id, { 
                         allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
                     });
@@ -970,12 +1070,28 @@ app.post("/edit_user", async (req, res) => {
                 const cost = AMNEZIA_COEFFICIENT * expire;
                 
                 if (mode === "reservation") {
-                    // Reservation mode for Amnezia (no traffic reset, just add time)
-                    console.log(`Edit user - Reservation mode for Amnezia: Adding ${expire} days, deducting ${cost} units`);
+                    // Reservation mode for Amnezia (WITH traffic reset, add time to existing time)
+                    await update_user(user_id, { used_traffic: 0 });
+                    
+                    // Record original expiry for refund calculations
+                    const reservationStartTime = Math.floor(Date.now() / 1000);
+                    await update_user(user_id, { 
+                        reservation_data: {
+                            original_expire: user_obj.expire,
+                            reservation_time: reservationStartTime,
+                            added_days: expire
+                        }
+                    });
+                    
+                    console.log(`Edit user - Reservation mode for Amnezia: Reset traffic and adding ${expire} days, deducting ${cost} units`);
                 } else {
                     // Renewal mode for Amnezia (reset traffic)
-                    await update_user(user_id, { used_traffic: 0 });
-                    console.log(`Edit user - Renewal mode for Amnezia: Reset traffic, adding ${expire} days, deducting ${cost} units`);
+                    await update_user(user_id, { 
+                        used_traffic: 0,
+                        // Clear any reservation data since this is a full renewal
+                        reservation_data: null
+                    });
+                    console.log(`Edit user - Renewal mode for Amnezia: Reset traffic, adding ${expire} days from now, deducting ${cost} units`);
                 }
                 
                 // در هر حالت، هزینه از حساب عامل کسر می‌شود

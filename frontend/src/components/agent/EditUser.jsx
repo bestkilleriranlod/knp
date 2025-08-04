@@ -215,14 +215,24 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             const dataLimit = panel_type === "AMN" ? 10000 : selectedPlan.dataLimit
             const daysToExpire = selectedPlan.days
             
-            // Check how many days remain for the user
+            // Check how many days remain for the user and data usage
             const daysRemaining = item && item.expire ? timeStampToDay(item.expire) : 0
-            console.log("Days remaining:", daysRemaining)
+            const isExpired = daysRemaining <= 0
+            
+            // Check data usage (for V2Ray)
+            const usedTrafficGB = item ? b2gb(item.used_traffic) : 0
+            const dataLimitGB = item ? b2gb(item.data_limit) : 0
+            const dataRemainingPercent = dataLimitGB > 0 ? (usedTrafficGB / dataLimitGB) * 100 : 0
+            const isDataDepleted = dataRemainingPercent >= 100
+            
+            console.log("Days remaining:", daysRemaining, "Data usage:", usedTrafficGB + "/" + dataLimitGB + "GB", "(" + Math.round(dataRemainingPercent) + "%)")
             
             // Determine if this is a reservation (add time) or renewal (reset)
-            const isReservation = daysRemaining < 10
+            // Reservation: Both time and data are still available
+            // Renewal: Either time or data is depleted
+            const isReservation = !isExpired && !isDataDepleted
             const mode = isReservation ? "reservation" : "renewal"
-            console.log("Edit mode:", mode, "- Days remaining:", daysRemaining)
+            console.log("Edit mode:", mode, "- Is expired:", isExpired, "- Is data depleted:", isDataDepleted)
             
             // Send parameters to server based on mode
             onEditItem(
