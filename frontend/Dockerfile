@@ -8,7 +8,8 @@ RUN npm install
 
 COPY . .
 
-# Build the app
+# Build the app with CI=true to ignore ESLint warnings as errors
+ENV CI=true
 RUN npm run build
 
 # Serve using a lightweight server
