@@ -607,9 +607,9 @@ app.post("/delete_user", async (req, res) => {
                 
                 // اگر منطق قبلی لازم بود حفظ شود، می‌توان اینجا نگه داشت
                 if(process.env.RELEASE == "ALI") {
-                    if(user_obj.used_traffic == 0)
-                    await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
-                }
+                if(user_obj.used_traffic == 0)
+                await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+            }
                 else if(process.env.RELEASE != "REZA") {
                     if( !(agent_obj.business_mode == 1 && (user_obj.used_traffic > user_obj.data_limit/4 || 7*86400 < (Math.floor(Date.now()/1000) - user_obj.created_at) )) ) 
                     await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
@@ -642,7 +642,7 @@ app.post("/delete_user", async (req, res) => {
                     });
                 } else {
                     // Standard refund for non-reservation
-                    const remaining_days = Math.max(0, Math.floor((user_obj.expire - now)/86400));
+                const remaining_days = Math.max(0, Math.floor((user_obj.expire - now)/86400));
                     await update_account(agent_obj.id, { 
                         allocatable_data: format_number(agent_obj.allocatable_data + remaining_days * AMNEZIA_COEFFICIENT)
                     });
@@ -951,7 +951,7 @@ app.post("/edit_user", async (req, res) => {
     console.log("Edit user - Agent countries:", corresponding_agent.country);
     console.log("Edit user - Selected country:", country);
     console.log("Edit user - Old country:", old_country);
-    
+
     if (corresponding_agent.disable) res.send({ status: "ERR", msg: "your account is disabled" })
     else if(!corresponding_agent.edit_access) res.send({ status: "ERR", msg: "access denied" })
     // اجازه تمدید کاربران در پنل‌های پر شده
@@ -969,12 +969,6 @@ app.post("/edit_user", async (req, res) => {
 
         var is_changing_country = old_country != country;
         var is_changing_protocols = !deep_equal(proxy_obj_maker(protocols,flow_status,2),user_obj.inbounds)
-        var result = await edit_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username, data_limit * ((2 ** 10) ** 3), Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60, protocols, flow_status,is_changing_country,is_changing_protocols);
-
-        if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" });
-
-        else {
-
             var inbounds = proxy_obj_maker(protocols,flow_status,2)
 
             if(is_changing_country)
@@ -985,24 +979,55 @@ app.post("/edit_user", async (req, res) => {
                 }
             }
 
-            // Log mode for debugging
-            console.log(`Edit user - Mode: ${mode}, Is reset data: ${is_reset_data}, Days to expire: ${expire}`);
-            
-            // Handle expire date based on mode
-            let newExpireTime;
-            if (mode === "reservation") {
-                // Reservation mode: Add days to current expire date
-                newExpireTime = user_obj.expire + (expire * 24 * 60 * 60);
-                console.log(`Edit user - Reservation mode: Adding ${expire} days to current expire date`);
-            } else {
-                // Renewal mode: Set a new expire date from now
-                newExpireTime = Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60;
-                console.log(`Edit user - Renewal mode: Setting new expire date to ${expire} days from now`);
-            }
-            
+        // Log mode for debugging
+        console.log(`Edit user - Mode: ${mode}, Is reset data: ${is_reset_data}, Days to expire: ${expire}`);
+        
+        // Handle expire date based on mode
+        let newExpireTime;
+        let finalDataLimit = data_limit;
+
+        if(panel_obj.panel_type == "MZ" && mode === "reservation")
+        {
+            // For V2Ray reservation, calculate final data limit first
+            const usedTraffic = user_obj.used_traffic;
+            const remainingDataBytes = Math.max(0, user_obj.data_limit - usedTraffic);
+            const remainingDataGB = b2gb(remainingDataBytes);
+            finalDataLimit = data_limit + remainingDataGB;
+            console.log(`V2Ray reservation: Adding ${data_limit} GB to remaining ${remainingDataGB} GB. Final: ${finalDataLimit} GB`);
+        }
+
+        // Calculate expire time 
+        if (mode === "reservation") {
+            // Reservation mode: Add days to current expire date
+            newExpireTime = user_obj.expire + (expire * 24 * 60 * 60);
+            console.log(`Edit user - Reservation mode: Adding ${expire} days to current expire date`);
+        } else {
+            // Renewal mode: Set a new expire date from now
+            newExpireTime = Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60;
+            console.log(`Edit user - Renewal mode: Setting new expire date to ${expire} days from now`);
+        }
+        
+        // FIRST, call edit_vpn with the FINAL values
+        var result = await edit_vpn(
+            panel_obj.panel_url, 
+            panel_obj.panel_username, 
+            panel_obj.panel_password, 
+            user_obj.username, 
+            finalDataLimit * ((2 ** 10) ** 3), // Use the calculated final data limit
+            newExpireTime, // Use the calculated expire time
+            protocols, 
+            flow_status,
+            is_changing_country,
+            is_changing_protocols
+        );
+
+        if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" });
+
+        else {
+            // Now update the database with the same values we sent to the panel
             await update_user(user_id, {
                 expire: newExpireTime,
-                data_limit: data_limit * ((2 ** 10) ** 3),
+                data_limit: finalDataLimit * ((2 ** 10) ** 3),
                 inbounds,
                 safu:/*safu?1:0*/0,
                 desc
@@ -1013,19 +1038,10 @@ app.post("/edit_user", async (req, res) => {
                 if (mode === "reservation") {
                     // Reservation mode for V2Ray (both time and data remaining)
                     
-                    // Calculate remaining data
-                    const usedTraffic = user_obj.used_traffic;
-                    const remainingDataBytes = Math.max(0, user_obj.data_limit - usedTraffic);
-                    const remainingDataGB = b2gb(remainingDataBytes);
-                    
-                    // Reset usage and add remaining data to new plan data
-                    const newDataLimit = (data_limit + remainingDataGB) * ((2 ** 10) ** 3);
-                    
-                    // Record original data and expiry for refund calculations
+                    // Reset usage and store reservation data for refund calculations
                     const reservationStartTime = Math.floor(Date.now() / 1000);
                     await update_user(user_id, { 
                         used_traffic: 0,
-                        data_limit: newDataLimit,
                         reservation_data: {
                             original_expire: user_obj.expire, 
                             original_data_limit: user_obj.data_limit,
@@ -1040,11 +1056,11 @@ app.post("/edit_user", async (req, res) => {
                         allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
                     });
                     
-                    console.log(`Edit user - Reservation mode for V2Ray: Reset usage, kept remaining ${remainingDataGB} GB and added ${data_limit} GB. New data limit: ${b2gb(newDataLimit)} GB`);
+                    console.log(`Edit user - Reservation mode for V2Ray: Reset usage, new data limit: ${finalDataLimit} GB`);
                 }
                 // Renewal mode
                 else if(is_reset_data) {
-                    // Clear all reservation data since this is a full renewal
+                    // Clear all reservation data and reset usage since this is a full renewal
                     await update_user(user_id, { 
                         used_traffic: 0,
                         reservation_data: null 
@@ -1071,11 +1087,10 @@ app.post("/edit_user", async (req, res) => {
                 
                 if (mode === "reservation") {
                     // Reservation mode for Amnezia (WITH traffic reset, add time to existing time)
-                    await update_user(user_id, { used_traffic: 0 });
-                    
                     // Record original expiry for refund calculations
                     const reservationStartTime = Math.floor(Date.now() / 1000);
                     await update_user(user_id, { 
+                        used_traffic: 0,
                         reservation_data: {
                             original_expire: user_obj.expire,
                             reservation_time: reservationStartTime,
@@ -1220,7 +1235,7 @@ app.post("/reset_user", async (req, res) => {
         const dataUsedGB = b2gb(user_obj.used_traffic);
         const dataLimitGB = b2gb(user_obj.data_limit);
         const usagePercent = Math.round((dataUsedGB / dataLimitGB) * 100);
-        
+
         await update_user(user_id, { used_traffic: 0 });
         if(user_obj.status=="limited") await update_user(user_id, { status: "active" });
 
