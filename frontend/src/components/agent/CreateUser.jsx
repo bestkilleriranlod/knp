@@ -14,6 +14,7 @@ import Button from '../Button'
 import Dropdown from '../Dropdown'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Checkbox from '@mui/material/Checkbox'
+import PlanSelection from '../form/inputs/PlanSelection'
 
 const flowOptions = [
     { label: "none", value: "none" },
@@ -45,6 +46,7 @@ const CreateUser = ({ onClose, showForm }) => {
     const [ipLimitValue, setIpLimitValue] = useState("")
     const [dataLimitValue, setDataLimitValue] = useState("")
     const [expireInputType, setExpireInputType] = useState("number")
+    const [selectedPlan, setSelectedPlan] = useState(null)
 
     const createUserOnServer = async (
         username, data_limit, expire, country,desc,ip_limit
@@ -122,8 +124,16 @@ const CreateUser = ({ onClose, showForm }) => {
                 setIsDataLimitDisabled(false)
                 setIpLimitValue(2)
                 setDataLimitValue("")
-                setExpireInputType("number")
+                setExpireInputType("plan_selection")
                 setSelectedProtocols(availableProtocolsName)
+                
+                // تنظیم پلن پیش‌فرض برای v2ray
+                setSelectedPlan({
+                    days: 30,
+                    dataLimit: 30,
+                    cost: 30,
+                    label: `30 گیگ - 30 روز (30 واحد)`
+                });
             }
             else if(panelType === "AMN")
             {
@@ -131,10 +141,19 @@ const CreateUser = ({ onClose, showForm }) => {
                 setIsIpLimitDisabled(true)
                 setDataLimitValue(10000)
                 setIpLimitValue(5)
-                setExpireInputType("expire_selection")
+                setExpireInputType("plan_selection")
                 
                 // برای اکانت‌های امنزیا، پروتکل‌ها را به طور خودکار انتخاب می‌کنیم
                 setSelectedProtocols(availableProtocolsName)
+                
+                // تنظیم پلن پیش‌فرض برای امنزیا
+                setSelectedPlan({
+                    days: 30,
+                    dataLimit: null,
+                    cost: 30 * (10/3), // هزینه امنزیا: 3.33 برابر روز
+                    label: `30 روز (${30 * (10/3)} واحد)`
+                });
+                setAmneziaDays(30)
             }
             const updatedProtocols = protocols.map((protocol) => ({
                 name: protocol.name,
@@ -178,13 +197,21 @@ const CreateUser = ({ onClose, showForm }) => {
     }, [showForm])
 
     const handleSubmitForm = () => {
+        if (!selectedPlan) {
+            setError_msg("لطفاً یک پلن انتخاب کنید")
+            setHasError(true)
+            return
+        }
+        
         const username = document.getElementById("username").value
-        const data_limit = document.getElementById("dataLimit").value
-        const expire = expireInputType == "number" ? document.getElementById("daysToExpire").value : amneziaDays
+        const panelType = expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"
+        const data_limit = panelType === "AMN" ? 10000 : selectedPlan.dataLimit
+        const expire = selectedPlan.days
         const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
         const desc = document.getElementById("desc").value
         const ip_limit = document.getElementById("ipLimit").value
-        createUserOnServer(username, data_limit, expire, country,desc,ip_limit)
+        
+        createUserOnServer(username, data_limit, expire, country, desc, ip_limit)
     }
 
 
@@ -239,9 +266,7 @@ const CreateUser = ({ onClose, showForm }) => {
 
     const formFields = [
         { label: "Username", type: "text", id: "username", name: "username" },
-        { label: "Data Limit", type: "create_user_number", id: "dataLimit", name: "dataLimit", disabled: isDataLimitDisabled, value:dataLimitValue, onChange: (e) => setDataLimitValue(e.target.value) },
         { label: "Ip Limit", type: "create_user_number", id: "ipLimit", name: "ipLimit", disabled: isIpLimitDisabled, value:ipLimitValue, onChange: (e) => setIpLimitValue(e.target.value) },
-        { label: "Days To Expire", type: expireInputType, id: "daysToExpire", name: "daysToExpire" , onChange: setAmneziaDays, value: amneziaDays},
         { label: "Country", type: "multi-select2", id: "country", name: "country", onChange: setCountry },
         { label: "Description", type: "text", id: "desc", name: "desc" },
     ]
@@ -349,8 +374,20 @@ const CreateUser = ({ onClose, showForm }) => {
                                 )}
 
 
+                            {/* کامپوننت انتخاب پلن */}
+                            {country && (
+                                <div className={styles['plan-section']}>
+                                    <PlanSelection 
+                                        panelType={expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"} 
+                                        onSelectPlan={setSelectedPlan} 
+                                        selectedPlan={selectedPlan}
+                                        availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0} // موجودی قابل اختصاص عامل
+                                    />
+                                </div>
+                            )}
+
                             </form>
-                            {country && expireInputType !== "expire_selection" && (
+                            {country && expireInputType === "plan_selection" && dataLimitValue != 10000 && (
                                 <div className={`${styles['protocols-section']}`}>
                                     <h4 className='flex items-center gap-1'>Porotocols {isLoadingProtocols && <span className="flex items-center spinner"><SpinnerIcon /></span>}</h4>
                                     <div className={`${styles.protocols}`}>

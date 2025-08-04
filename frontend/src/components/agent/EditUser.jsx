@@ -10,6 +10,7 @@ import { ReactComponent as XMarkIcon } from '../../assets/svg/x-mark.svg'
 import { ReactComponent as ThreeDotsIcon } from '../../assets/svg/three-dots.svg'
 import { ReactComponent as SpinnerIcon } from '../../assets/svg/spinner.svg'
 import Checkbox from '@mui/material/Checkbox'
+import PlanSelection from '../form/inputs/PlanSelection'
 
 
 import Button from '../Button'
@@ -47,6 +48,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const [error_msg, setError_msg] = useState("failed to switch countries")
     const [flag, setFlag] = useState(false)
     const [isDataLimitDisabled, setIsDataLimitDisabled] = useState(false)
+    const [selectedPlan, setSelectedPlan] = useState(null)
 
     const access_token = sessionStorage.getItem("access_token")
 
@@ -69,27 +71,60 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                 setFlowValue({ label: item.inbounds.vless.flow, value: item.inbounds.vless.flow })
             }
 
-            // تشخیص نوع پنل امنزیا
+            // تشخیص نوع پنل از روی شناسه پنل یا کشور
             console.log("Panel ID:", item.corresponding_panel_id)
             console.log("Panel Type:", panel_type)
             
             if (panel_type === "AMN") {
-                setExpireInputType("expire_selection")
+                setExpireInputType("plan_selection")
                 // تنظیم مقدار روز‌های امنزیا با استفاده از مقدار روز فعلی کاربر
                 if (item.expire) {
                     const days = timeStampToDay(item.expire)
                     // انتخاب نزدیک‌ترین مقدار به 30، 60 یا 90
-                    if (days <= 30) {
-                        setAmneziaDays(30)
-                    } else if (days <= 60) {
-                        setAmneziaDays(60)
-                    } else {
-                        setAmneziaDays(90)
-                    }
+                    let closestDays = 30;
+                    if (days > 45) closestDays = 60;
+                    if (days > 75) closestDays = 90;
+                    
+                    // تنظیم پلن پیش‌فرض بر اساس تعداد روز
+                    setSelectedPlan({
+                        days: closestDays,
+                        dataLimit: null,
+                        cost: closestDays * (10/3), // هزینه امنزیا: 3.33 برابر روز
+                        label: `${closestDays} روز (${closestDays * (10/3)} واحد)`
+                    });
+                    setAmneziaDays(closestDays)
                 }
             } else {
-                setExpireInputType("number")
-                setAmneziaDays(null)
+                setExpireInputType("plan_selection")
+                // تنظیم پلن v2ray بر اساس مقادیر فعلی کاربر
+                const days = timeStampToDay(item.expire)
+                const dataGB = b2gb(item.data_limit)
+                
+                // پیدا کردن نزدیک‌ترین پلن
+                const closestDays = days <= 45 ? 30 : 60;
+                let closestDataLimit = 30; // مقدار پیش‌فرض
+                
+                // تعیین نزدیک‌ترین حجم داده
+                if (closestDays === 30) {
+                    if (dataGB <= 22.5) closestDataLimit = 15;
+                    else if (dataGB <= 45) closestDataLimit = 30;
+                    else closestDataLimit = 60;
+                } else { // 60 روزه
+                    if (dataGB <= 45) closestDataLimit = 30;
+                    else if (dataGB <= 90) closestDataLimit = 60;
+                    else closestDataLimit = 120;
+                }
+                
+                // تنظیم پلن
+                let cost = closestDataLimit;
+                if (closestDays === 60) cost = closestDataLimit * 2;
+                
+                setSelectedPlan({
+                    days: closestDays,
+                    dataLimit: closestDataLimit,
+                    cost: cost,
+                    label: `${closestDataLimit} گیگ - ${closestDays} روز (${cost} واحد)`
+                });
             }
         }
     }, [item])
@@ -151,9 +186,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
 
     const formFields = [
         { label: "Username", type: "text", id: "username", name: "username", disabled: true },
-        { label: "Data Limit", type: "number", id: "data_limit", name: "data_limit", disabled: isDataLimitDisabled },
+        // حذف فیلدهای Data Limit و Days To Expire و استفاده از انتخاب پلن به جای آنها
         { label: "Ip Limit", type: "number", id: "ipLimit", name: "ipLimit", disabled: true },
-        { label: "Days To Expire", type: expireInputType, id: "expire", name: "expire", onChange: setAmneziaDays, value: amneziaDays },
         { label: "Country", type: "multi-select2", id: "country", name: "country", onChange: setCountry, disabled: true },
         { label: "Description", type: "text", id: "desc", name: "desc" },
     ]
@@ -161,16 +195,28 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const primaryButtons = [
         { label: "Cancel", className: "outlined", onClick: onClose },
         {
-            label: "Renew User", className: "primary", onClick: () => onEditItem(
-                item.id,
-                document.getElementById("data_limit").value,
-                expireInputType === "expire_selection" ? amneziaDays : document.getElementById("expire").value,
-                item.country, // همیشه از کشور اصلی کاربر استفاده کن
-                selectedProtocols,
-                flowValue.value,
-                document.getElementById("desc").value,
-                safu
-            ),
+            label: "Renew User", className: "primary", onClick: () => {
+                if (!selectedPlan) {
+                    setError_msg("لطفاً یک پلن انتخاب کنید")
+                    setHasError(true)
+                    return
+                }
+                
+                // محاسبه مقادیر بر اساس پلن انتخابی
+                const dataLimit = panel_type === "AMN" ? 10000 : selectedPlan.dataLimit
+                const daysToExpire = selectedPlan.days
+                
+                onEditItem(
+                    item.id,
+                    dataLimit,
+                    daysToExpire,
+                    item.country, // همیشه از کشور اصلی کاربر استفاده کن
+                    selectedProtocols,
+                    flowValue.value,
+                    document.getElementById("desc").value,
+                    safu
+                )
+            },
             disabled: editMode,
             pendingText: "Editing..."
         },
@@ -360,6 +406,16 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                                     sx={{marginLeft: "-9px",}}
                                     />}
                                 label="Start after first use" />
+                            
+                            {/* کامپوننت انتخاب پلن */}
+                            <div className={styles['plan-section']}>
+                                <PlanSelection 
+                                    panelType={panel_type} 
+                                    onSelectPlan={setSelectedPlan} 
+                                    selectedPlan={selectedPlan}
+                                    availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0} // موجودی قابل اختصاص عامل
+                                />
+                            </div>
 
                             </form>
                             {panel_type !== "AMN" && (
