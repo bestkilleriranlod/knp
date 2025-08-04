@@ -482,7 +482,7 @@ app.post("/create_user", async (req, res) => {
             else if(selected_panel.panel_type == "AMN") await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - expire * AMNEZIA_COEFFICIENT)});
             
 
-            // Add more detailed log with panel type, IP limit and cost
+            // Add more detailed log with panel type and cost (removed concurrent users)
             const cost = selected_panel.panel_type == "AMN" ? 
                 Math.ceil(expire * AMNEZIA_COEFFICIENT) : 
                 data_limit;
@@ -490,7 +490,7 @@ app.post("/create_user", async (req, res) => {
             await insert_to_logs(
                 agent_id, 
                 "CREATE_USER", 
-                `created user !${username} with !${data_limit} GB data, !${expire} days of expire time, !${ip_limit} concurrent users on !${selected_panel.panel_name} (!${selected_panel.panel_type}). Cost: !${cost} units.`,
+                `created user !${username} with !${data_limit} GB data, !${expire} days of expire time on !${selected_panel.panel_name} (!${selected_panel.panel_type}). Cost: !${cost} units.`,
                 access_token
             );
 
