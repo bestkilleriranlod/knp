@@ -36,7 +36,16 @@ const FormField = ({
         return (
             <motion.div className="modal__form__group" >
                 <label className="modal__form__label" htmlFor={id}>{label}</label>
-                <MultiSelect2 editValue={editValue} onChange={onChange} value={value} defaultValue={defaultValue} id={id} disabled={disabled} />
+                <MultiSelect2 
+                    editValue={editValue} 
+                    onChange={onChange} 
+                    value={value} 
+                    defaultValue={defaultValue} 
+                    id={id} 
+                    disabled={disabled}
+                    isEditMode={type === "multi-select2" && id === "country"}
+                    existingCountry={editValue && editValue.length > 0 ? editValue[0] : null}
+                />
             </motion.div>
         )
     }

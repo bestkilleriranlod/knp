@@ -6,7 +6,7 @@ import FormControl from '@mui/material/FormControl'
 import Select from '@mui/material/Select'
 import axios from 'axios'
 
-export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
+export default function BasicSelect({ onChange, defaultValue, id, disabled, isEditMode, existingCountry }) {
   // برای نمایش خطا
   const [errorMessage, setErrorMessage] = useState('')
   const [age, setAge] = useState(defaultValue)
@@ -16,6 +16,16 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
   const handleChange = (event) => {
     const selectedValue = event.target.value
     const selectedCountry = countries.find(c => c.name === selectedValue)
+    
+    // اگر در حالت ویرایش هستیم و کشور انتخابی همان کشور فعلی کاربر است، مهم نیست که پنل پر باشد
+    if (isEditMode && selectedValue === existingCountry) {
+      setErrorMessage('')
+      setAge(selectedValue)
+      if (onChange) {
+        onChange(selectedValue)
+      }
+      return
+    }
     
     // اگر کشور انتخابی پر شده باشد، خطا نمایش داده شود
     if (selectedCountry && selectedCountry.isFull) {
@@ -156,7 +166,7 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled }) {
               <MenuItem 
                 key={country.name} 
                 value={country.name}
-                disabled={country.isFull}
+                disabled={country.isFull && !(isEditMode && country.name === existingCountry)}
                 sx={{
                   ...((country.isFull || (country.spotsLeft !== null && country.spotsLeft <= 20)) ? {
                     display: 'flex',
