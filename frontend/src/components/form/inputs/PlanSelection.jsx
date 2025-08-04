@@ -82,7 +82,7 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData })
                 {/* Concurrent users */}
                 <div className={styles['plan-detail']}>
                   <span className={styles['detail-label']}>Concurrent Users:</span>
-                  <span className={styles['detail-value']}>2</span>
+                  <span className={styles['detail-value']}>{panelType === 'AMN' ? '1' : '2'}</span>
                 </div>
                 {/* Cost */}
                 <div className={styles['plan-detail']}>

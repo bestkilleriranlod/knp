@@ -210,7 +210,8 @@ const CreateUser = ({ onClose, showForm }) => {
         const expire = selectedPlan.days
         const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
         const desc = document.getElementById("desc").value
-        const ip_limit = document.getElementById("ipLimit").value
+        // Use default IP limit values (field is hidden)
+        const ip_limit = panelType === "AMN" ? 5 : 2 // 5 for Amnezia, 2 for V2Ray
         
         // Since the protocols section is hidden, ensure protocols are set 
         // Make sure at least one protocol is selected
@@ -276,7 +277,6 @@ const CreateUser = ({ onClose, showForm }) => {
     
     const formFields = [
         { label: "Username", type: "username_with_refresh", id: "username", name: "username", onChange: (e) => setUsernameValue(e.target.value) },
-        { label: "Ip Limit", type: "create_user_number", id: "ipLimit", name: "ipLimit", disabled: isIpLimitDisabled, value:ipLimitValue, onChange: (e) => setIpLimitValue(e.target.value) },
         { label: "Country", type: "multi-select2", id: "country", name: "country", onChange: setCountry },
         { label: "Description", type: "text", id: "desc", name: "desc" },
     ]

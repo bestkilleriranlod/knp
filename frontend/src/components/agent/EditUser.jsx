@@ -178,8 +178,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
 
     const formFields = [
         { label: "Username", type: "text", id: "username", name: "username", disabled: true },
-        // حذف فیلدهای Data Limit و Days To Expire و استفاده از انتخاب پلن به جای آنها
-        { label: "Ip Limit", type: "number", id: "ipLimit", name: "ipLimit", disabled: true },
+        // حذف فیلدهای Data Limit، Days To Expire و IP Limit و استفاده از انتخاب پلن به جای آنها
         { label: "Country", type: "multi-select2", id: "country", name: "country", onChange: setCountry, disabled: true },
         { label: "Description", type: "text", id: "desc", name: "desc" },
     ]
