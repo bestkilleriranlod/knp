@@ -1,226 +1,349 @@
 <!DOCTYPE html>
-    <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amnezia Config</title>
+    <title>Amnezia Configuration</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body
-        {
-            margin:0;
-            padding:0;
-            border:none;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            align-content:center;
-            flex-direction:column;
-            height:100vh;
-            width:100%;
-            background:#222c3b;
+        :root {
+            --primary-color: #6366f1;
+            --primary-hover: #4f46e5;
+            --success-color: #10b981;
+            --success-hover: #059669;
+            --danger-color: #ef4444;
+            --danger-hover: #dc2626;
+            --bg-color: #1e293b;
+            --text-color: #f8fafc;
+            --card-bg: #334155;
+            --border-radius: 8px;
         }
 
-        .btn
-        {
-            padding:10px 15px;
-            border:none;
-            color:#fff;
-            font-size:20px;
-            cursor:pointer;
-            border-radius:5px;
-            color:black;
-            width:200px;
-            font-family:monospace;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Poppins', sans-serif;
         }
 
-        .btn1
-        {
-            background:#749aec;
-            transition:all 0.2s;
+        body {
+            margin: 0;
+            padding: 0;
+            border: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            width: 100%;
+            background: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
         }
 
-        .btn1:hover
-        {
-            background:#a4bbec;
+        .container {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
         }
 
-        .btn2
-        {
-            background:#9ae6b4;
-            margin-left:10px;
-            transition:all 0.2s;
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
         }
 
-        .btn2:hover
-        {
-            background:#bfe4cb;
+        .header h1 {
+            font-weight: 600;
+            font-size: 28px;
+            margin-bottom: 8px;
         }
 
-        .btn3
-        {
-            background:#e69a9a;
-            margin-left:10px;
-            transition:all 0.2s;
+        .header p {
+            color: #94a3b8;
+            font-size: 16px;
         }
 
-        .btn3:hover
-        {
-            background:#e1bbbb;
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
 
-        .btn-container
-        {
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            align-content:center;
-            flex-direction:row;
-            margin-top:25px;
-            width:100%;
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            width: 100%;
         }
 
-        .copy-text-container
-        {
-            width:80%;
-            max-width:500px;
-            padding:20px;
-            border:2px solid #6a6a6a;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            align-content:center;
-            flex-direction:column;
-            border-radius:5px;
-            
+        .btn svg {
+            width: 20px;
+            height: 20px;
         }
 
-        #copy-text-input
-        {
-            width:100%;
-            height:280px;
-            border:none;
-            font-size:16px;
-            background:#fff;
-            border-radius:5px;
-            padding:5px;
-            outline:none;
-            resize:none;
-            overflow: hidden;
+        .btn-primary {
+            background: var(--primary-color);
         }
 
-        .qr_image
-        {
-            display:none;
-            position:absolute;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            align-content:center;
-            flex-direction:row;
-            transition:all 0.2s;
-            opacity:0;
+        .btn-primary:hover {
+            background: var(--primary-hover);
         }
 
-        .qr_image > img
-        {
-            display:none;
-            z-index:10;
+        .btn-success {
+            background: var(--success-color);
+        }
+
+        .btn-success:hover {
+            background: var(--success-hover);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+        }
+
+        .btn-danger:hover {
+            background: var(--danger-hover);
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .config-area {
+            width: 100%;
+            background: #1e293b;
+            border: 1px solid #475569;
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin-top: 16px;
             position: relative;
-            max-width:400px;
-            width:95%;
-            transform:scale(0.9);
-            transition:all 0.2s;
         }
 
-        .qr_image > .overlay
-        {
-            display:none;
-            position:fixed;
-            top:0;
-            left:0;
-            width:100%;
-            height:100%;
-            background:rgba(0,0,0,0.5);
-            z-index:5;
-            transition:all 0.2s;
-            
+        #copy-text-input {
+            width: 100%;
+            min-height: 200px;
+            border: none;
+            font-size: 14px;
+            font-family: monospace;
+            background: transparent;
+            color: var(--text-color);
+            padding: 0;
+            outline: none;
+            resize: none;
+            overflow: auto;
         }
 
-        @media screen and (max-width: 500px)
-        {
-            .btn-container
-            {
-                flex-direction:column;
-            }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
 
-            .btn2,.btn3
-            {
-                margin-left:0;
-                margin-top:10px;
-            }
+        .modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
 
-            .btn1,.btn2,.btn3
-            {
-                width:100%;
+        .modal-content {
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: var(--border-radius);
+            max-width: 90%;
+            width: 400px;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+            position: relative;
+        }
+
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        .qr-code {
+            width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+        }
+
+        .copy-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success-color);
+            color: white;
+            padding: 12px 20px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+        }
+
+        .copy-notification.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media screen and (max-width: 600px) {
+            .buttons {
+                grid-template-columns: 1fr;
+            }
+            .header h1 {
+                font-size: 24px;
+            }
+            .card {
+                padding: 20px;
             }
         }
 
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            background: var(--primary-color);
+            border-radius: 9999px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 
 <body>
+    <!-- Main Content -->
+    <div class="container">
+        <div class="header">
+            <div class="badge">Amnezia VPN</div>
+            <h1>Your Configuration</h1>
+            <p>Account: <strong>{{username}}</strong></p>
+            <p>Use the buttons below to import or copy your configuration</p>
+        </div>
 
-    <div class="qr_image">
-        <div onclick="close_qr_code_popup()" class="overlay"></div>
-        <img src="" alt="QR Code">
-    </div>
+        <div class="card">
+            <div class="config-area">
+                <textarea type="text" id="copy-text-input" readonly>{{amnezia_config}}</textarea>
+            </div>
 
-    <div class="copy-text-container">
-        <textarea type="text" id="copy-text-input" readonly="">{{amnezia_config}}</textarea>
-            <div class="btn-container">
-            <button class="btn btn1" onclick="copy()">Copy</button>
-            <button class="btn btn2" onclick="window.location.href=&#39;{{amnezia_config}}&#39;;">Amnezia</button>
-            <button class="btn btn3" onclick="open_qr_code_popup()">QR Code</button>
+            <div class="buttons">
+                <button class="btn btn-primary" onclick="copyToClipboard()">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5" />
+                    </svg>
+                    Copy
+                </button>
+                
+                <button class="btn btn-success" onclick="window.location.href='{{amnezia_config}}';">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15M9 12l3 3m0 0 3-3m-3 3V2.25" />
+                    </svg>
+                    Import
+                </button>
+                
+                <button class="btn btn-danger" onclick="openQrModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
+                    </svg>
+                    QR Code
+                </button>
+            </div>
         </div>
     </div>
 
+    <!-- QR Code Modal -->
+    <div class="modal" id="qr-modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeQrModal()">×</button>
+            <h2 style="margin-bottom: 16px; text-align: center;">Scan QR Code</h2>
+            <img src="" alt="QR Code" class="qr-code" id="qr-image">
+        </div>
+    </div>
 
-<script>
+    <!-- Copy Notification -->
+    <div class="copy-notification" id="copy-notification">
+        Configuration copied to clipboard!
+    </div>
 
+    <script>
+        // Set QR code source
+        document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${window.location.href}`;
 
-    document.querySelectorAll(".qr_image > img")[0].src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${window.location.href}`;
+        // Copy to clipboard function
+        function copyToClipboard() {
+            const textArea = document.getElementById('copy-text-input');
+            textArea.select();
+            document.execCommand('copy');
+            
+            // Show notification
+            const notification = document.getElementById('copy-notification');
+            notification.classList.add('active');
+            
+            // Hide notification after 3 seconds
+            setTimeout(() => {
+                notification.classList.remove('active');
+            }, 3000);
+        }
 
-    function copy() 
-    {
-        const el = document.getElementById('copy-text-input');
-        el.select();
-        document.execCommand('copy');
-    }
+        // Open QR modal
+        function openQrModal() {
+            const modal = document.getElementById('qr-modal');
+            modal.classList.add('active');
+        }
 
-    function open_qr_code_popup()
-    {
+        // Close QR modal
+        function closeQrModal() {
+            const modal = document.getElementById('qr-modal');
+            modal.classList.remove('active');
+        }
 
-        document.querySelector('.qr_image').style.display = 'flex';
-        document.querySelector('.qr_image').querySelectorAll('.overlay')[0].style.display = 'flex';
-        document.querySelector('.qr_image').querySelectorAll('img')[0].style.display = 'flex';
-        setTimeout(() => {
-            document.querySelector('.qr_image').style.opacity = 1;
-            document.querySelector('.qr_image').querySelectorAll('img')[0].style.transform = 'scale(1)';
-        }, 10);
-    }
-
-    function close_qr_code_popup()
-    {
-        var qr_image = document.querySelector('.qr_image');
-        qr_image.style.opacity = 0;
-        qr_image.querySelectorAll('img')[0].style.transform = 'scale(0.9)';
-        setTimeout(() => {
-            qr_image.style.display = 'none';
-            qr_image.querySelectorAll('.overlay')[0].style.display = 'none';
-            qr_image.querySelectorAll('img')[0].style.display = 'none';
-        }, 200);
-    }
-
-</script>
-
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('qr-modal');
+            if (event.target == modal) {
+                closeQrModal();
+            }
+        }
+    </script>
 </body>
-
 </html>

@@ -234,8 +234,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             console.log("Data usage:", dataUsed, "GB of", currentDataLimit, "GB (", dataUsagePercentage.toFixed(2), "%)")
             
             // Determine if this is a reservation (add time) or renewal (reset)
-            // رزرو فقط در حالتی که کاربر هنوز زمان و حجم داشته باشد
-            const isReservation = !isExpired && !isDataExhausted && daysRemaining < 10
+            // رزرو فقط در حالتی که کاربر هنوز زمان و حجم داشته باشد و بین 1 تا 7 روز باقی مانده باشد
+            const isReservation = !isExpired && !isDataExhausted && daysRemaining >= 1 && daysRemaining <= 7
             const mode = isReservation ? "reservation" : "renewal"
             console.log("Edit mode:", mode, "- Reason:", isExpired ? "Account expired" : isDataExhausted ? "Data exhausted" : daysRemaining >= 10 ? "More than 10 days remaining" : "Less than 10 days remaining")
             
@@ -396,6 +396,40 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                         {formHeader}
                         <main className={styles['modal__body']}>
                             <form className={styles['modal__form']}>
+                                {/* User Status Badge */}
+                                {item && (
+                                    <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center' }}>
+                                        <div style={{ 
+                                            display: 'inline-flex', 
+                                            alignItems: 'center',
+                                            padding: '6px 12px',
+                                            borderRadius: '4px',
+                                            fontSize: '14px',
+                                            fontWeight: 'bold',
+                                            backgroundColor: item.status === 'active' && !item.disable ? '#e6f7e6' : '#ffebee',
+                                            color: item.status === 'active' && !item.disable ? '#2e7d32' : '#c62828',
+                                            border: `1px solid ${item.status === 'active' && !item.disable ? '#2e7d32' : '#c62828'}`
+                                        }}>
+                                            <span style={{ marginRight: '8px' }}>
+                                                {item.status === 'active' && !item.disable ? '●' : '○'}
+                                            </span>
+                                            <span>
+                                                Status: {item.status === 'active' && !item.disable ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </div>
+                                        
+                                        {/* Data Usage */}
+                                        {item.data_limit && (
+                                            <div style={{ marginLeft: '15px' }}>
+                                                <span style={{ fontWeight: 'bold' }}>Data Usage: </span>
+                                                {b2gb(item.used_traffic || 0)} GB / {b2gb(item.data_limit)} GB
+                                                {" "}
+                                                ({item.data_limit ? Math.round((item.used_traffic / item.data_limit) * 100) : 0}%)
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                
                                 {formFields.map((group, rowIndex) => (
                                     <div key={rowIndex} className="flex gap-16">
                                         {Array.isArray(group) ? group.map((field, index) => {
