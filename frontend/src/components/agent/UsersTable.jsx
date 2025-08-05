@@ -60,68 +60,8 @@ const UsersTable = ({ items, currentItems, onEditItem, onCreateItem }) => {
 
                 return (
                     <>
-                        {/* محاسبه روزهای باقی‌مانده و مقدار دیتای باقی‌مانده برای نمایش هشدار */}
-                        <tr 
-                            key={key} 
-                            onClick={shouldRenderTr ? undefined : () => onEditItem(item)}
-                            style={(() => {
-                                // محاسبه روزهای باقی‌مانده
-                                const remainingDays = Math.floor((item.expire - Math.floor(Date.now() / 1000)) / 86400);
-                                
-                                // محاسبه دیتای باقی‌مانده به گیگابایت
-                                const usedDataGB = parseFloat((item.used_traffic / (2 ** 10) ** 3).toFixed(2));
-                                const totalDataGB = parseFloat((item.data_limit / (2 ** 10) ** 3).toFixed(2));
-                                const remainingDataGB = totalDataGB - usedDataGB;
-                                
-                                // تعیین نیاز به نمایش هشدار
-                                const showWarning = 
-                                    (item.expire > Math.floor(Date.now() / 1000) && remainingDays <= 5) || // کمتر از 5 روز زمان باقی‌مانده
-                                    (remainingDataGB <= 5 && remainingDataGB > 0); // کمتر از 5 گیگابایت باقی‌مانده
-                                    
-                                return showWarning ? {
-                                    backgroundColor: 'rgba(253, 224, 71, 0.2)', // رنگ زمینه زرد کم‌رنگ
-                                    position: 'relative',
-                                } : {};
-                            })()}
-                        >
-                            <td style={{ maxWidth: "10rem" }}>
-                                {item.username} <br></br> 
-                                <span className='panelUrl' >{show_url(item.corresponding_panel)} </span>
-                                {(() => {
-                                    // محاسبه روزهای باقی‌مانده
-                                    const remainingDays = Math.floor((item.expire - Math.floor(Date.now() / 1000)) / 86400);
-                                    
-                                    // محاسبه دیتای باقی‌مانده به گیگابایت
-                                    const usedDataGB = parseFloat((item.used_traffic / (2 ** 10) ** 3).toFixed(2));
-                                    const totalDataGB = parseFloat((item.data_limit / (2 ** 10) ** 3).toFixed(2));
-                                    const remainingDataGB = totalDataGB - usedDataGB;
-                                    
-                                    // تعیین نیاز به نمایش هشدار
-                                    const showWarning = 
-                                        (item.expire > Math.floor(Date.now() / 1000) && remainingDays <= 5) || // کمتر از 5 روز زمان باقی‌مانده
-                                        (remainingDataGB <= 5 && remainingDataGB > 0); // کمتر از 5 گیگابایت باقی‌مانده
-                                    
-                                    if (showWarning) {
-                                        return (
-                                            <div style={{
-                                                marginTop: '4px',
-                                                padding: '2px 8px',
-                                                borderRadius: '4px',
-                                                backgroundColor: '#FBBF24',
-                                                color: '#7C2D12',
-                                                fontSize: '11px',
-                                                fontWeight: 'bold',
-                                                display: 'inline-block'
-                                            }}>
-                                                {remainingDays <= 5 && remainingDays > 0 ? `${remainingDays} days left` : ''}
-                                                {remainingDays <= 5 && remainingDays > 0 && remainingDataGB <= 5 ? ' & ' : ''}
-                                                {remainingDataGB <= 5 && remainingDataGB > 0 ? `${remainingDataGB} GB left` : ''}
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                })()}
-                            </td>
+                        <tr key={key} onClick={shouldRenderTr ? undefined : () => onEditItem(item)}>
+                            <td style={{ maxWidth: "10rem" }}>{item.username} <br></br> <span className='panelUrl' >{show_url(item.corresponding_panel)} </span> </td>
                             <td>
                                 <span className={`status ${userStatus}`}>{userStatus}</span>
                                 <span className="expire-time">{expireTime}</span>
