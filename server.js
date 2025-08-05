@@ -879,7 +879,8 @@ app.post("/edit_user", async (req, res) => {
         console.log("Country access denied: country not in allowed list and different from old country");
         res.send({ status: "ERR", msg: "country access denied" })
     }
-    else if(b2gb(user_obj.used_traffic) > data_limit) res.send({ status: "ERR", msg: "data limit can't be reduced" })
+    // Ignore used_traffic > data_limit check if this is a renewal
+    else if(b2gb(user_obj.used_traffic) > data_limit && mode !== "renewal") res.send({ status: "ERR", msg: "data limit can't be reduced" })
     else if (panel_obj.panel_type != "AMN" &&  data_limit - old_data_limit > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
     else if (panel_obj.panel_type == "AMN" && expire * AMNEZIA_COEFFICIENT > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
     else if (panel_obj.panel_type == "AMN" && expire % 30 != 0) res.send({ status: "ERR", msg: "invalid expire time" })
@@ -931,19 +932,24 @@ app.post("/edit_user", async (req, res) => {
             if(panel_obj.panel_type == "MZ")
             {
                 if (mode === "reservation") {
-                    // Reservation mode for V2Ray (less than 10 days remaining)
-                    // 1. Add data to current data limit
-                    const newDataLimit = user_obj.data_limit + (data_limit * ((2 ** 10) ** 3));
+                    // Reservation mode for V2Ray (1-7 days remaining and not expired)
+                    // 1. Calculate remaining data limit
+                    const remainingDataLimit = user_obj.data_limit - user_obj.used_traffic;
+                    const remainingDataGB = b2gb(remainingDataLimit);
+                    console.log(`Edit user - Reservation mode for V2Ray: Remaining data: ${remainingDataGB} GB`);
+                    
+                    // 2. Add new data limit to remaining data
+                    const newDataLimit = remainingDataLimit + (data_limit * ((2 ** 10) ** 3));
                     await update_user(user_id, { 
                         data_limit: newDataLimit 
                     });
                     
-                    // 2. Deduct data from agent's allocatable data
+                    // 3. Deduct data from agent's allocatable data
                     await update_account(corresponding_agent.id, { 
                         allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
                     });
                     
-                    console.log(`Edit user - Reservation mode for V2Ray: Added ${data_limit} GB to current limit. New data limit: ${b2gb(newDataLimit)} GB`);
+                    console.log(`Edit user - Reservation mode for V2Ray: Added ${data_limit} GB to remaining ${remainingDataGB} GB. New data limit: ${b2gb(newDataLimit)} GB`);
                 }
                 // Renewal mode
                 else if(is_reset_data) {
@@ -970,8 +976,9 @@ app.post("/edit_user", async (req, res) => {
                 const cost = AMNEZIA_COEFFICIENT * expire;
                 
                 if (mode === "reservation") {
-                    // Reservation mode for Amnezia (no traffic reset, just add time)
-                    console.log(`Edit user - Reservation mode for Amnezia: Adding ${expire} days, deducting ${cost} units`);
+                    // تغییر در حالت رزرو امنزیا: ریست کردن حجم مصرفی و فقط اضافه کردن روزها به تاریخ فعلی
+                    await update_user(user_id, { used_traffic: 0 });
+                    console.log(`Edit user - Reservation mode for Amnezia: Reset traffic and adding ${expire} days, deducting ${cost} units`);
                 } else {
                     // Renewal mode for Amnezia (reset traffic)
                     await update_user(user_id, { used_traffic: 0 });

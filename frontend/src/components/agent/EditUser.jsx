@@ -234,8 +234,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             console.log("Data usage:", dataUsed, "GB of", currentDataLimit, "GB (", dataUsagePercentage.toFixed(2), "%)")
             
             // Determine if this is a reservation (add time) or renewal (reset)
-            // رزرو فقط در حالتی که کاربر هنوز زمان و حجم داشته باشد
-            const isReservation = !isExpired && !isDataExhausted && daysRemaining < 10
+            // رزرو فقط در حالتی که کاربر هنوز زمان و حجم داشته باشد و بین 1 تا 7 روز باقی مانده باشد
+            const isReservation = !isExpired && !isDataExhausted && daysRemaining >= 1 && daysRemaining <= 7
             const mode = isReservation ? "reservation" : "renewal"
             console.log("Edit mode:", mode, "- Reason:", isExpired ? "Account expired" : isDataExhausted ? "Data exhausted" : daysRemaining >= 10 ? "More than 10 days remaining" : "Less than 10 days remaining")
             
