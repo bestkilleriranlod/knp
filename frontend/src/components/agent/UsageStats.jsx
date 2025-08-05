@@ -47,24 +47,7 @@ const UsageStats = ({ activeUsers, totalUsers, dataUsage, remainingData, allocab
                         <PieChartIcon />
                     </LeadingIcon>
                     <div className="usage-stats__item__label">Remaining Data</div>
-                    <div className="usage-stats__item__value">
-                        <span>{remainingData}</span>
-                        {/* نمایش هشدار اگر دیتای باقی‌مانده کمتر از 100 گیگابایت باشد */}
-                        {parseFloat(remainingData) < 100 && (
-                            <div style={{
-                                marginLeft: '10px',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                backgroundColor: '#FBBF24',
-                                color: '#7C2D12',
-                                fontSize: '11px',
-                                fontWeight: 'bold',
-                                display: 'inline-block'
-                            }}>
-                                LOW BALANCE
-                            </div>
-                        )}
-                    </div>
+                    <div className="usage-stats__item__value"><span>{remainingData}</span></div>
                 </div>
                 }
 
@@ -79,24 +62,7 @@ const UsageStats = ({ activeUsers, totalUsers, dataUsage, remainingData, allocab
                     </div>
 
                     <div className="usage-stats__item__label">{business_mode=="0"?"Allocatable Data":"Remaining Data"}</div>
-                    <div className="usage-stats__item__value">
-                        <span>{allocableData}</span>
-                        {/* نمایش هشدار اگر دیتای قابل تخصیص کمتر از 100 گیگابایت باشد */}
-                        {parseFloat(allocableData) < 100 && (
-                            <div style={{
-                                marginLeft: '10px',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                backgroundColor: '#FBBF24',
-                                color: '#7C2D12',
-                                fontSize: '11px',
-                                fontWeight: 'bold',
-                                display: 'inline-block'
-                            }}>
-                                LOW BALANCE
-                            </div>
-                        )}
-                    </div>
+                    <div className="usage-stats__item__value"><span>{allocableData}</span></div>
                 </div>
             </div>
         </div>
