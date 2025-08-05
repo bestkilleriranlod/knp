@@ -147,7 +147,7 @@ const FormField = ({
                         <RefreshIcon />
                     </button>
                 </div>
-            </motion.div>
+        </motion.div>
         )
     }
 
