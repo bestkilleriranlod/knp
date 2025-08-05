@@ -1581,7 +1581,12 @@ app.get(/^\/sub\/.+/,async (req,res) =>
         if(user_obj[0].real_subscription_url.startsWith("http")) res.redirect(user_obj[0].real_subscription_url);
         else
         {
-            res.send(amnezia_sub_page_html.replaceAll("{{amnezia_config}}",user_obj[0].real_subscription_url));
+            // اضافه کردن نام کاربری به صفحه HTML
+            const username = user_obj[0].username;
+            const html = amnezia_sub_page_html
+                .replaceAll("{{amnezia_config}}", user_obj[0].real_subscription_url)
+                .replaceAll("{{username}}", username);
+            res.send(html);
         }
         
     }
