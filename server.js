@@ -1581,11 +1581,36 @@ app.get(/^\/sub\/.+/,async (req,res) =>
         if(user_obj[0].real_subscription_url.startsWith("http")) res.redirect(user_obj[0].real_subscription_url);
         else
         {
-            // اضافه کردن نام کاربری به صفحه HTML
+            // اضافه کردن نام کاربری، تاریخ باقیمانده و وضعیت به صفحه HTML
             const username = user_obj[0].username;
+            
+            // محاسبه روزهای باقیمانده
+            const currentTime = Math.floor(Date.now() / 1000);
+            const expireTime = user_obj[0].expire;
+            const daysRemaining = expireTime > currentTime ? Math.floor((expireTime - currentTime) / 86400) + 1 : 0;
+            
+            // تعیین وضعیت کاربر
+            let status = "Active";
+            let statusClass = "active";
+            
+            if (user_obj[0].disable === 1) {
+                status = "Disabled";
+                statusClass = "disabled";
+            } else if (daysRemaining <= 0) {
+                status = "Expired";
+                statusClass = "expired";
+            } else if (user_obj[0].status === "limited") {
+                status = "Limited";
+                statusClass = "limited";
+            }
+            
             const html = amnezia_sub_page_html
                 .replaceAll("{{amnezia_config}}", user_obj[0].real_subscription_url)
-                .replaceAll("{{username}}", username);
+                .replaceAll("{{username}}", username)
+                .replaceAll("{{days_remaining}}", daysRemaining)
+                .replaceAll("{{status}}", status)
+                .replaceAll("{{status_class}}", statusClass);
+            
             res.send(html);
         }
         

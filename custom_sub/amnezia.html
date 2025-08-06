@@ -236,6 +236,15 @@
             .card {
                 padding: 20px;
             }
+            .account-username {
+                font-size: 22px;
+            }
+            .days-value {
+                font-size: 20px;
+            }
+            .user-info-card {
+                padding: 20px;
+            }
         }
 
         .badge {
@@ -247,6 +256,102 @@
             font-size: 14px;
             margin-bottom: 16px;
         }
+        
+        /* استایل‌های جدید برای اطلاعات کاربر */
+        .user-details {
+            width: 100%;
+            margin: 24px 0;
+        }
+        
+        .user-info-card {
+            background-color: #1e293b;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .account-info {
+            width: 100%;
+        }
+        
+        .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        
+        .account-label {
+            font-size: 14px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        
+        .account-username {
+            font-size: 26px;
+            font-weight: 700;
+            margin: 0;
+            padding: 0;
+            color: #f8fafc;
+            margin-bottom: 16px;
+        }
+        
+        .days-info {
+            display: flex;
+            flex-direction: column;
+            margin-top: 6px;
+        }
+        
+        .days-label {
+            font-size: 14px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        
+        .days-value {
+            font-size: 22px;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+        
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        
+        .status-active {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid #10b981;
+        }
+        
+        .status-disabled {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+        
+        .status-expired {
+            background-color: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            border: 1px solid #f59e0b;
+        }
+        
+        .status-limited {
+            background-color: rgba(99, 102, 241, 0.15);
+            color: #6366f1;
+            border: 1px solid #6366f1;
+        }
     </style>
 </head>
 
@@ -256,7 +361,25 @@
         <div class="header">
             <div class="badge">Amnezia VPN</div>
             <h1>Your Configuration</h1>
-            <p>Account: <strong>{{username}}</strong></p>
+            
+            <div class="user-details">
+                <!-- اطلاعات کاربر -->
+                <div class="user-info-card">
+                    <div class="account-info">
+                        <div class="account-header">
+                            <span class="account-label">Account</span>
+                            <div class="status-badge status-{{status_class}}">{{status}}</div>
+                        </div>
+                        <h2 class="account-username">{{username}}</h2>
+                        
+                        <div class="days-info">
+                            <span class="days-label">Days Remaining</span>
+                            <span class="days-value">{{days_remaining}} days</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <p>Use the buttons below to import or copy your configuration</p>
         </div>
 
