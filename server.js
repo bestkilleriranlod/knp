@@ -890,7 +890,30 @@ app.post("/edit_user", async (req, res) => {
 
         var is_changing_country = old_country != country;
         var is_changing_protocols = !deep_equal(proxy_obj_maker(protocols,flow_status,2),user_obj.inbounds)
-        var result = await edit_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username, data_limit * ((2 ** 10) ** 3), Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60, protocols, flow_status,is_changing_country,is_changing_protocols);
+
+        // Calculate values to push to panel based on mode/panel type
+        const expireSeconds = expire * 24 * 60 * 60;
+        const isReservation = mode === "reservation";
+        const panelExpireToSet = isReservation ? (user_obj.expire + expireSeconds) : (Math.floor(Date.now() / 1000) + expireSeconds);
+
+        let panelDataLimitToSet = data_limit * ((2 ** 10) ** 3);
+        if (panel_obj.panel_type == "MZ" && isReservation) {
+            const remainingDataBytes = Math.max(0, (user_obj.data_limit - user_obj.used_traffic));
+            panelDataLimitToSet = remainingDataBytes + panelDataLimitToSet;
+        }
+
+        var result = await edit_vpn(
+            panel_obj.panel_url,
+            panel_obj.panel_username,
+            panel_obj.panel_password,
+            user_obj.username,
+            panelDataLimitToSet,
+            panelExpireToSet,
+            protocols,
+            flow_status,
+            is_changing_country,
+            is_changing_protocols
+        );
 
         if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" });
 
@@ -923,7 +946,7 @@ app.post("/edit_user", async (req, res) => {
             
             await update_user(user_id, {
                 expire: newExpireTime,
-                data_limit: data_limit * ((2 ** 10) ** 3),
+                data_limit: panelDataLimitToSet,
                 inbounds,
                 safu:/*safu?1:0*/0,
                 desc
@@ -932,41 +955,25 @@ app.post("/edit_user", async (req, res) => {
             if(panel_obj.panel_type == "MZ")
             {
                 if (mode === "reservation") {
-                    // Reservation mode for V2Ray (1-7 days remaining and not expired)
-                    // 1. Calculate remaining data limit
-                    const remainingDataLimit = user_obj.data_limit - user_obj.used_traffic;
-                    const remainingDataGB = b2gb(remainingDataLimit);
-                    console.log(`Edit user - Reservation mode for V2Ray: Remaining data: ${remainingDataGB} GB`);
-                    
-                    // 2. Add new data limit to remaining data
-                    const newDataLimit = remainingDataLimit + (data_limit * ((2 ** 10) ** 3));
-                    await update_user(user_id, { 
-                        data_limit: newDataLimit 
-                    });
-                    
-                    // 3. Deduct data from agent's allocatable data
+                    // Reservation mode for V2Ray: combined data already set on panel and DB; just deduct agent data
+                    const remainingDataGB = b2gb(Math.max(0, (user_obj.data_limit - user_obj.used_traffic)));
                     await update_account(corresponding_agent.id, { 
                         allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
                     });
-                    
-                    console.log(`Edit user - Reservation mode for V2Ray: Added ${data_limit} GB to remaining ${remainingDataGB} GB. New data limit: ${b2gb(newDataLimit)} GB`);
+                    console.log(`Edit user - Reservation mode for V2Ray: Added ${data_limit} GB to remaining ${remainingDataGB} GB.`);
                 }
-                // Renewal mode
+                // Renewal mode: reset usage on panel and deduct agent data
                 else if(is_reset_data) {
-                    // ریست کردن حجم استفاده شده
+                    var resetRes = await reset_marzban_user(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
+                    if (resetRes == "ERR") { console.log("WARN: failed to reset usage on panel during renewal"); }
                     await update_user(user_id, { used_traffic: 0 });
-                    
-                    // کسر اعتبار از حساب عامل
                     await update_account(corresponding_agent.id, { 
                         allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
                     });
-                    
-                    console.log(`Edit user - Renewal mode for V2Ray: Reset data for user ${user_id}, deducted ${data_limit} GB`);
+                    console.log(`Edit user - Renewal mode for V2Ray: Reset data on panel for user ${user_id}, deducted ${data_limit} GB`);
                 }
                 else if(( 
                     (corresponding_agent.business_mode == 1)
-                    //(user_obj.used_traffic > user_obj.data_limit/4 || (user_obj.expire - user_obj.created_at) < (Math.floor(Date.now()/1000) - user_obj.created_at)*4 ) /*&&
-                    //(old_data_limit > data_limit)
                 )) await update_account(corresponding_agent.id, { allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit + old_data_limit) });
             }
 
@@ -974,16 +981,12 @@ app.post("/edit_user", async (req, res) => {
             {
                 // در امنزیا فقط مقدار هزینه بر اساس روزهای پلن محاسبه می‌شود
                 const cost = AMNEZIA_COEFFICIENT * expire;
-                
-                if (mode === "reservation") {
-                    // تغییر در حالت رزرو امنزیا: ریست کردن حجم مصرفی و فقط اضافه کردن روزها به تاریخ فعلی
-                    await update_user(user_id, { used_traffic: 0 });
-                    console.log(`Edit user - Reservation mode for Amnezia: Reset traffic and adding ${expire} days, deducting ${cost} units`);
-                } else {
-                    // Renewal mode for Amnezia (reset traffic)
-                    await update_user(user_id, { used_traffic: 0 });
-                    console.log(`Edit user - Renewal mode for Amnezia: Reset traffic, adding ${expire} days, deducting ${cost} units`);
-                }
+
+                // Reset usage on panel (reservation and renewal)
+                var resetResA = await reset_marzban_user(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
+                if (resetResA == "ERR") { console.log("WARN: failed to reset usage on AMN panel"); }
+                await update_user(user_id, { used_traffic: 0 });
+                console.log(`Edit user - ${mode === "reservation" ? "Reservation" : "Renewal"} mode for Amnezia: Reset traffic, days processed, deducting ${cost} units`);
                 
                 // در هر حالت، هزینه از حساب عامل کسر می‌شود
                 await update_account(corresponding_agent.id, { 
