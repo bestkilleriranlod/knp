@@ -10,7 +10,7 @@ import styles from './PlanSelection.module.css'
  * @param {number} availableData - Available data allocation for the agent
  */
 const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData }) => {
-  const [customGB, setCustomGB] = useState(15)
+  const [customGB, setCustomGB] = useState('15')
   // AMNEZIA_COEFFICIENT constant from server
   const AMNEZIA_COEFFICIENT = 2.3333; // Same value as in server.js
   
@@ -112,14 +112,15 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData })
         {panelType !== 'AMN' && (
           <motion.div
             key="custom"
-            className={`${styles['plan-item']} ${selectedPlan && selectedPlan.isCustom ? styles['selected'] : ''} ${availableData < customGB ? styles['disabled'] : ''}`}
+            className={`${styles['plan-item']} ${selectedPlan && selectedPlan.isCustom ? styles['selected'] : ''} ${availableData < Math.max(15, (parseInt(customGB || '0', 10) || 0)) ? styles['disabled'] : ''}`}
             onClick={() => {
-              const gb = Math.max(15, parseInt(customGB || 0, 10))
+              const num = parseInt(customGB || '0', 10) || 0
+              const gb = Math.max(15, num)
               if (availableData >= gb) {
                 onSelectPlan({ days: 30, dataLimit: gb, cost: gb, isCustom: true, label: `Custom - ${gb} GB - 30 Days (${gb} Units)` })
               }
             }}
-            whileHover={{ scale: availableData >= customGB ? 1.02 : 1 }}
+            whileHover={{ scale: availableData >= Math.max(15, (parseInt(customGB || '0', 10) || 0)) ? 1.02 : 1 }}
             transition={{ duration: 0.2 }}
           >
             <div className={styles['plan-content']}>
@@ -130,13 +131,21 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData })
                   <span className={styles['detail-label']}>Data Limit (GB):</span>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }} onClick={(e) => e.stopPropagation()}>
                     <input
-                      type="number"
-                      min={15}
-                      step={1}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={customGB}
                       onChange={(e) => {
-                        const val = Math.max(15, parseInt(e.target.value || 0, 10))
-                        setCustomGB(val)
+                        const digits = (e.target.value || '').replace(/[^0-9]/g, '')
+                        setCustomGB(digits)
+                        if (selectedPlan && selectedPlan.isCustom) {
+                          const val = Math.max(15, (parseInt(digits || '0', 10) || 0))
+                          onSelectPlan({ days: 30, dataLimit: val, cost: val, isCustom: true, label: `Custom - ${val} GB - 30 Days (${val} Units)` })
+                        }
+                      }}
+                      onBlur={() => {
+                        const val = Math.max(15, (parseInt(customGB || '0', 10) || 0))
+                        setCustomGB(String(val))
                         if (selectedPlan && selectedPlan.isCustom) {
                           onSelectPlan({ days: 30, dataLimit: val, cost: val, isCustom: true, label: `Custom - ${val} GB - 30 Days (${val} Units)` })
                         }
@@ -151,12 +160,12 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData })
                         color: 'inherit'
                       }}
                     />
-                    <span className={styles['detail-value']} style={{ whiteSpace: 'nowrap' }}>{Math.max(15, parseInt(customGB || 0, 10))} Units</span>
+                    <span className={styles['detail-value']} style={{ whiteSpace: 'nowrap' }}>{Math.max(15, (parseInt(customGB || '0', 10) || 0))} Units</span>
                   </div>
                 </div>
               </div>
             </div>
-            {availableData < customGB && (
+            {availableData < Math.max(15, (parseInt(customGB || '0', 10) || 0)) && (
               <div className={styles['unavailable-overlay']}>
                 <div className={styles['unavailable-text']}>Insufficient Balance</div>
               </div>
