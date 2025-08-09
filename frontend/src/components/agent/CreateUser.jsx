@@ -132,7 +132,7 @@ const CreateUser = ({ onClose, showForm }) => {
                     days: 30,
                     dataLimit: 30,
                     cost: 30,
-                    label: `30 گیگ - 30 روز (30 واحد)`
+                    label: `30 GB - 30 Days (30 Units)`
                 });
             }
             else if(panelType === "AMN")

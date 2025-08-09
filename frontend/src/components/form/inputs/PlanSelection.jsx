@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import styles from './PlanSelection.module.css'
 
@@ -10,6 +10,7 @@ import styles from './PlanSelection.module.css'
  * @param {number} availableData - Available data allocation for the agent
  */
 const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData }) => {
+  const [customGB, setCustomGB] = useState(15)
   // AMNEZIA_COEFFICIENT constant from server
   const AMNEZIA_COEFFICIENT = 2.3333; // Same value as in server.js
   
@@ -107,6 +108,61 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData })
             )}
           </motion.div>
         ))}
+
+        {panelType !== 'AMN' && (
+          <motion.div
+            key="custom"
+            className={`${styles['plan-item']} ${selectedPlan && selectedPlan.isCustom ? styles['selected'] : ''} ${availableData < customGB ? styles['disabled'] : ''}`}
+            onClick={() => {
+              const gb = Math.max(15, parseInt(customGB || 0, 10))
+              if (availableData >= gb) {
+                onSelectPlan({ days: 30, dataLimit: gb, cost: gb, isCustom: true, label: `Custom - ${gb} GB - 30 Days (${gb} Units)` })
+              }
+            }}
+            whileHover={{ scale: availableData >= customGB ? 1.02 : 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className={styles['plan-content']}>
+              <h5 className={styles['plan-name']}>Custom</h5>
+              <div className={styles['plan-days']}>30 Days</div>
+              <div className={styles['plan-details']}>
+                <div className={styles['plan-detail']} style={{ width: '100%' }}>
+                  <span className={styles['detail-label']}>Data Limit (GB):</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="number"
+                      min={15}
+                      step={1}
+                      value={customGB}
+                      onChange={(e) => {
+                        const val = Math.max(15, parseInt(e.target.value || 0, 10))
+                        setCustomGB(val)
+                        if (selectedPlan && selectedPlan.isCustom) {
+                          onSelectPlan({ days: 30, dataLimit: val, cost: val, isCustom: true, label: `Custom - ${val} GB - 30 Days (${val} Units)` })
+                        }
+                      }}
+                      className={styles['custom-input']}
+                      style={{
+                        flex: '1 1 auto',
+                        padding: '8px 10px',
+                        borderRadius: 6,
+                        border: '1px solid var(--border-clr, #2f3b52)',
+                        background: 'transparent',
+                        color: 'inherit'
+                      }}
+                    />
+                    <span className={styles['detail-value']} style={{ whiteSpace: 'nowrap' }}>{Math.max(15, parseInt(customGB || 0, 10))} Units</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {availableData < customGB && (
+              <div className={styles['unavailable-overlay']}>
+                <div className={styles['unavailable-text']}>Insufficient Balance</div>
+              </div>
+            )}
+          </motion.div>
+        )}
       </div>
     </div>
   )

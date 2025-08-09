@@ -122,7 +122,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                     days: days,
                     dataLimit: closestDataLimit,
                     cost: cost,
-                    label: `${closestDataLimit} گیگ - ${days} روز (${cost} واحد)`
+                    label: `${closestDataLimit} GB - ${days} Days (${cost} Units)`
                 });
             }
         }
