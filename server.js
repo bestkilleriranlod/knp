@@ -955,12 +955,14 @@ app.post("/edit_user", async (req, res) => {
             if(panel_obj.panel_type == "MZ")
             {
                 if (mode === "reservation") {
-                    // Reservation mode for V2Ray: combined data already set on panel and DB; just deduct agent data
-                    const remainingDataGB = b2gb(Math.max(0, (user_obj.data_limit - user_obj.used_traffic)));
+                    // Reservation mode for V2Ray: reset usage on panel and deduct agent data
+                    var resetRes = await reset_marzban_user(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
+                    if (resetRes == "ERR") { console.log("WARN: failed to reset usage on panel during reservation"); }
+                    await update_user(user_id, { used_traffic: 0 });
                     await update_account(corresponding_agent.id, { 
                         allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit)
                     });
-                    console.log(`Edit user - Reservation mode for V2Ray: Added ${data_limit} GB to remaining ${remainingDataGB} GB.`);
+                    console.log(`Edit user - Reservation mode for V2Ray: Reset data on panel for user ${user_id}, deducted ${data_limit} GB`);
                 }
                 // Renewal mode: reset usage on panel and deduct agent data
                 else if(is_reset_data) {
