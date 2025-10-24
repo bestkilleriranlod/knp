@@ -519,32 +519,7 @@ const disable_panel = async (panel_id) =>
 
 const enable_panel = async (panel_id) =>
 {
-    var panel_obj = await get_panel(panel_id);
-    if(Math.floor(Date.now()/1000) - panel_obj.last_online > 600 && false)
-    {
-        try
-        {
-            const response = await axios
-            ({
-                url: secondary_backend_url_converter(panel_obj.panel_url,"edit_expire_times"),
-                method: 'POST',
-                responseType: 'stream',
-                data: {api_key:SB_API_KEY,added_time:Math.floor(Date.now()/1000) - panel_obj.last_online}
-            });
-
-            await syslog("added !" + Math.floor(Date.now()/1000) - panel_obj.last_online + " seconds to expire times of panel !" + panel_obj.panel_url,1)
-        }
-
-        catch(err)
-        {
-            console.log(err);
-            await syslog("!ERROR : failed to update expire times of panel !" + panel_obj.panel_url);
-        }
-
-    }
-
-    
-    await update_panel(panel_id, { disable:0,last_online:2000000000 });
+    await update_panel(panel_id, { disable:0, last_online: Math.floor(Date.now()/1000) });
 }
 
 
