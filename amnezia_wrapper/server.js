@@ -100,8 +100,6 @@ app2.post("/ping", custom_handler(async (req, res) =>
 
 app1.post("/api/admin/token", custom_handler(async (req, res) =>
 {
-    console.log(process.env.SUDO_USERNAME,process.env.SUDO_PASSWORD);
-    console.log(req.body.username,req.body.password);
     if(req.body.username == process.env.SUDO_USERNAME && req.body.password == process.env.SUDO_PASSWORD)
     {
         res.send

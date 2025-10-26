@@ -134,7 +134,7 @@ const generate_desc = (expire, ip_limit) =>
     desc += "|"
     desc += String(get_days_left(expire)).farsify() + " روزه";
     desc += "|"
-    desc += "1 کاربره";
+    desc += String(ip_limit).farsify() + " کاربره";
 
     return to_unicode_escape(desc);
 }
@@ -648,31 +648,34 @@ const update_users_subscription_desc = async () =>
 
     for(let user of users)
     {
-        if(user.connection_uuids.length == 0 && !user.has_been_unlocked && user.created_at + 86400 < get_now() && user.used_traffic == 0)
+        // Check if user's expire time is more than 100 days and cap it at 90 days
+        const days_since_creation = get_days_passed(user.created_at);
+        const max_expire_days = 90;
+        const threshold_days = 100;
+        
+        if(days_since_creation > threshold_days)
         {
-
-            const new_expire = user.expire + 86400;
-
+            const max_expire_timestamp = user.created_at + (max_expire_days * 24 * 60 * 60);
+            
             var subscription_url_raw = 
             {
                 config_version:1,
                 api_endpoint:`https://${process.env.ENDPOINT_ADDRESS}/sub`,
                 protocol:"awg",
                 name:process.env.COUNTRY_EMOJI + " " + user.username,
-                description:generate_desc(new_expire,user.maximum_connections),
+                description:generate_desc(max_expire_timestamp,user.maximum_connections),
                 api_key:jwt.sign({username:user.username},SUB_JWT_SECRET),
             }
         
-
             const subscription_url = await encode_amnezia_data(JSON.stringify(subscription_url_raw));
 
             await User.updateOne({username: user.username},
             {
                 subscription_url,
-                expire: new_expire,
+                expire: max_expire_timestamp,
             });
 
-            console.log(`User ${user.username} subscription updated`);
+            console.log(`User ${user.username} expire time capped at 90 days (was ${days_since_creation} days)`);
         }
     }
 
@@ -708,38 +711,66 @@ const encode_amnezia_data = async (data) =>
     return result;
 }
 
-const get_next_available_ip = async () => {
-    const interface = await get_wg0_interface();
+const get_next_available_ip = async () =>
+{
+    var interface = await get_wg0_interface();
 
-    // استخراج لیست IPها از خروجی اینترفیس
-    const ips = interface
-        .split("\n")
-        .filter(line => line.includes("AllowedIPs"))
-        .map(line => line.split(" = ")[1].split("/")[0]);
+    var ips = interface.split("\n").filter((item) => item.includes("AllowedIPs"));
+    var ips_arr = ips.map((item) => item.split(" = ")[1]);
+    ips_arr = ips_arr.map((item) => item.split("/")[0]);
 
-    // تابع تبدیل IP به عدد و بالعکس
-    const ip2number = (ip) =>
-        ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0);
-    const number2ip = (num) =>
-        [num >>> 24, (num >>> 16) & 255, (num >>> 8) & 255, num & 255].join(".");
 
-    const subnetStart = ip2number("10.8.1.2");
-    const subnetEnd = ip2number("10.8.255.255");
+    /*
+    var last_ip = ips_arr[ips_arr.length - 1];
+    var last_ip_arr = last_ip.split(".");
+    if(last_ip_arr[3] == 255)
+    {
+        last_ip_arr[3] = 0;
+        last_ip_arr[2] = parseInt(last_ip_arr[2]) + 1;
+    }
+    else if(last_ip_arr[2] == 255)
+    {
+        last_ip_arr[2] = 0;
+        last_ip_arr[1] = parseInt(last_ip_arr[1]) + 1;
+    }
+    else if(last_ip_arr[1] == 255)
+    {
+        last_ip_arr[1] = 0;
+        last_ip_arr[0] = parseInt(last_ip_arr[0]) + 1
+    }
+    else if(last_ip_arr[0] == 255)
+    {
+        throw new Error("No more available IPs");
+    }
+    else
+    {
+        last_ip_arr[3] = parseInt(last_ip_arr[3]) + 1;
+    }
 
-    const usedSet = new Set(ips.map(ip2number));
+    return last_ip_arr.join(".") + "/32";
+    */
+    
+    const ip2number = (ip) => ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0);
+    const number2ip = (num) => [num >>> 24, (num >>> 16) & 255, (num >>> 8) & 255, num & 255].join(".");
 
-    for (let ip = subnetStart; ip <= subnetEnd; ip++) {
-        if (usedSet.has(ip)) continue;
+    const subnet_start = ip2number("10.8.1.2");
+    const subnet_end = ip2number("10.8.255.255");
 
-        const ipStr = number2ip(ip);
-        const lastOctet = parseInt(ipStr.split(".")[3], 10);
+    const used_arr = new Set(ips_arr.map(ip2number));
 
-        if ([0, 254, 255].includes(lastOctet)) continue;
-
-        return `${ipStr}/32`;
+    for (let ip = subnet_start; ip <= subnet_end; ip++) 
+    {
+        if(number2ip(ip).endsWith(".0") || number2ip(ip).endsWith(".255")) continue;
+        
+        if (!used_arr.has(ip)) 
+        {
+            return number2ip(ip) + "/32";
+        }
     }
 
     throw new Error("No more available IPs");
+    
+
 }
 
 const restart_awg_container = async () =>
@@ -791,14 +822,6 @@ const $sync_accounting = async () =>
     var interface = await get_wg0_interface();
     var interface_lines = interface.split("\n");
     var clients_table = await get_amnezia_clients_table();
-
-    // اول مطمئن شویم که دو خط اول [Interface] فعال هستند
-    if(interface_lines[0].startsWith("#")) {
-        interface_lines[0] = interface_lines[0].replace("#", "");
-    }
-    if(interface_lines[1].startsWith("#")) {
-        interface_lines[1] = interface_lines[1].replace("#", "");
-    }
 
     for(let user of users)
     {
@@ -884,38 +907,32 @@ const $sync_accounting = async () =>
         if(user.status != "active")
         {
             var public_key_line_index = interface_lines.findIndex((item) => item.includes(user.public_key));
-            if(public_key_line_index > 0 && !interface_lines[public_key_line_index + 2].startsWith("#")) 
+            if(!interface_lines[public_key_line_index + 2].startsWith("#")) 
             {
-                // اطمینان حاصل کنیم که با بخش [Interface] کار نداریم
-                if(!interface_lines[public_key_line_index - 1].includes("[Interface]")) {
-                    interface_lines[public_key_line_index - 1] = "#"+interface_lines[public_key_line_index - 1];
-                    interface_lines[public_key_line_index + 0] = "#"+interface_lines[public_key_line_index + 0];
-                    interface_lines[public_key_line_index + 1] = "#"+interface_lines[public_key_line_index + 1];
-                    interface_lines[public_key_line_index + 2] = "#"+interface_lines[public_key_line_index + 2];
+                interface_lines[public_key_line_index - 1] = "#"+interface_lines[public_key_line_index - 1];
+                interface_lines[public_key_line_index + 0] = "#"+interface_lines[public_key_line_index + 0];
+                interface_lines[public_key_line_index + 1] = "#"+interface_lines[public_key_line_index + 1];
+                interface_lines[public_key_line_index + 2] = "#"+interface_lines[public_key_line_index + 2];
 
-                    await replace_wg0_interface(interface_lines.join("\n"));
-                    await sync_configs();
-                    console.log(`UPDATED INTERFACE FOR ${user.username}`);
-                }
+                await replace_wg0_interface(interface_lines.join("\n"));
+                await sync_configs();
+                console.log(`UPDATED INTERFACE FOR ${user.username}`);
             }
         }
 
         else
         {
             var public_key_line_index = interface_lines.findIndex((item) => item.includes(user.public_key));
-            if(public_key_line_index > 0 && interface_lines[public_key_line_index + 2].startsWith("#")) 
+            if(interface_lines[public_key_line_index + 2].startsWith("#")) 
             {
-                // اطمینان حاصل کنیم که با بخش [Interface] کار نداریم
-                if(!interface_lines[public_key_line_index - 1].includes("[Interface]")) {
-                    interface_lines[public_key_line_index - 1] = interface_lines[public_key_line_index - 1].replace("#","");
-                    interface_lines[public_key_line_index + 0] = interface_lines[public_key_line_index + 0].replace("#","");
-                    interface_lines[public_key_line_index + 1] = interface_lines[public_key_line_index + 1].replace("#","");
-                    interface_lines[public_key_line_index + 2] = interface_lines[public_key_line_index + 2].replace("#","");
+                interface_lines[public_key_line_index - 1] = interface_lines[public_key_line_index - 1].replace("#","");
+                interface_lines[public_key_line_index + 0] = interface_lines[public_key_line_index + 0].replace("#","");
+                interface_lines[public_key_line_index + 1] = interface_lines[public_key_line_index + 1].replace("#","");
+                interface_lines[public_key_line_index + 2] = interface_lines[public_key_line_index + 2].replace("#","");
 
-                    await replace_wg0_interface(interface_lines.join("\n"));
-                    await sync_configs();
-                    console.log(`UPDATED INTERFACE FOR ${user.username}`);
-                }
+                await replace_wg0_interface(interface_lines.join("\n"));
+                await sync_configs();
+                console.log(`UPDATED INTERFACE FOR ${user.username}`);
             }
         }
 
