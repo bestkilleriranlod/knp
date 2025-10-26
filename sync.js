@@ -32,6 +32,97 @@ const {
     set_vpn_expiry,
 } = require("./utils");
 
+// Import Amnezia sync functions
+const {
+    get_amnezia_container_id,
+    exec_on_container,
+    get_user_traffic_from_wg_cli,
+} = require("./amnezia_wrapper/utils");
+
+// Import mongoose for Amnezia database
+const mongoose = require('mongoose');
+
+
+// Sync Amnezia traffic data
+const sync_amnezia_traffic = async () => {
+    try {
+        console.log("🔄 Syncing Amnezia traffic data...");
+        
+        // Connect to Amnezia database
+        await mongoose.connect('mongodb://127.0.0.1:27017/knaw');
+        
+        // Define Amnezia User schema
+        const amnezia_user_schema = new mongoose.Schema({
+            username: String,
+            expire: Number,
+            data_limit: Number,
+            used_traffic: { type: Number, default: 0 },
+            last_captured_traffic: { type: Number, default: 0 },
+            lifetime_used_traffic: { type: Number, default: 0 },
+            status: { type: String, default: "active", enum: ["active","limited","expired","disabled"] },
+            created_at: { type: Number, default: Date.now },
+            connection_string: { type: String, default: "" },
+            subscription_url: { type: String, default: "" },
+            real_subscription_url: { type: String, default: "" },
+            public_key: { type: String, default: "" },
+            maximum_connections: { type: Number, default: 1 },
+            connection_uuids: { type: Array, default: [] },
+            has_been_unlocked: { type: Boolean, default: false },
+        }, {collection: 'users', versionKey: false});
+        
+        const AmneziaUser = mongoose.model('AmneziaUser', amnezia_user_schema);
+        
+        // Get all Amnezia users
+        const amnezia_users = await AmneziaUser.find({});
+        
+        if (amnezia_users.length === 0) {
+            console.log("📊 No Amnezia users found");
+            return;
+        }
+        
+        console.log(`📊 Found ${amnezia_users.length} Amnezia users`);
+        
+        for (let user of amnezia_users) {
+            try {
+                if (!user.public_key) {
+                    console.log(`⚠️ User ${user.username} has no public_key, skipping`);
+                    continue;
+                }
+                
+                const used_traffic = await get_user_traffic_from_wg_cli(user.public_key);
+                
+                if (used_traffic !== false && used_traffic !== user.last_captured_traffic) {
+                    let new_used_traffic = user.used_traffic;
+                    
+                    if (used_traffic < user.used_traffic) {
+                        // Incremental update
+                        const incremental_value = used_traffic > user.last_captured_traffic ? 
+                            used_traffic - user.last_captured_traffic : used_traffic;
+                        new_used_traffic = user.used_traffic + incremental_value;
+                    } else if (used_traffic > user.used_traffic) {
+                        // Replace update
+                        new_used_traffic = used_traffic;
+                    }
+                    
+                    await AmneziaUser.updateOne({username: user.username}, {
+                        used_traffic: new_used_traffic,
+                        last_captured_traffic: used_traffic
+                    });
+                    
+                    console.log(`📊 User ${user.username} traffic updated: ${b2gb(new_used_traffic)} MB`);
+                }
+                
+            } catch (error) {
+                console.error(`❌ Error syncing traffic for user ${user.username}:`, error.message);
+            }
+        }
+        
+        console.log("✅ Amnezia traffic sync completed");
+        
+    } catch (error) {
+        console.error("❌ Error in Amnezia traffic sync:", error);
+    }
+};
 
 async function main()
 {
@@ -39,6 +130,9 @@ async function main()
     await sleep(20000);
 
     while (true) {
+        // Sync Amnezia traffic data first
+        await sync_amnezia_traffic();
+        
         var panels_arr = await get_panels();
         for (let panel of panels_arr) {
             
@@ -167,28 +261,41 @@ async function main()
                         const tehran0000_timestamp = tehran0000.unix();
 
                         var agent = await get_account(user.agent_id);
-                        agent.volume -= marzban_user.used_traffic - user.used_traffic;
+                        
+                        // Check if account is older than 6 days - if so, don't add traffic to agent
+                        const days_since_creation = Math.floor((Date.now() / 1000 - user.created_at) / (24 * 60 * 60));
+                        const traffic_difference = marzban_user.used_traffic - user.used_traffic;
+                        
+                        if (days_since_creation <= 6) {
+                            // Only add traffic to agent if account is 6 days or less old
+                            agent.volume -= traffic_difference;
+                        } else {
+                            console.log(`Account ${user.username} is ${days_since_creation} days old (>6 days), skipping agent traffic accounting`);
+                        }
                         
                         var daily_usage_logs = await get_agent_daily_usage_logs(agent.id);
                         var existance_flag = false;
 
-                        for(let usage_log of daily_usage_logs)
-                        {
-                            if(usage_log.date == tehran0000_timestamp)
+                        // Only update daily usage logs for accounts 6 days or less old
+                        if (days_since_creation <= 6) {
+                            for(let usage_log of daily_usage_logs)
                             {
-                                existance_flag = true;
-                                usage_log.volume += marzban_user.used_traffic - user.used_traffic;
-                                break;
+                                if(usage_log.date == tehran0000_timestamp)
+                                {
+                                    existance_flag = true;
+                                    usage_log.volume += traffic_difference;
+                                    break;
+                                }
                             }
-                        }
 
-                        if(!existance_flag)
-                        {
-                            daily_usage_logs.push
-                            ({
-                                date: tehran0000_timestamp,
-                                volume: marzban_user.used_traffic - user.used_traffic
-                            });
+                            if(!existance_flag)
+                            {
+                                daily_usage_logs.push
+                                ({
+                                    date: tehran0000_timestamp,
+                                    volume: traffic_difference
+                                });
+                            }
                         }
 
                         await update_account(agent.id, 
