@@ -547,12 +547,17 @@ app.post("/delete_user", async (req, res) => {
     // Handle different panel types
     var result;
     if (panel_obj.panel_type == "AMN") {
-        // For Amnezia, use the Amnezia delete_user function
-        const { delete_user: amnezia_delete_user } = require('./amnezia_wrapper/utils.js');
+        // For Amnezia, call the API endpoint
         try {
-            await amnezia_delete_user(username);
-            result = "DONE";
+            const axios = require('axios');
+            const response = await axios.delete(`${panel_obj.panel_url}/api/user/${username}`);
+            if (response.status === 200) {
+                result = "DONE";
+            } else {
+                result = "ERR";
+            }
         } catch (err) {
+            console.log("Error deleting Amnezia user:", err.message);
             result = "ERR";
         }
     } else {
