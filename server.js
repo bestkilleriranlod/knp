@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express'); const app = express();
 const fileUpload = require('express-fileupload');
 const fs = require('fs');
+const axios = require('axios');
 var AdmZip = require("adm-zip");
 var { accounts_clct, panels_clct, users_clct, logs_clct } = require('./db_interface');
 const amnezia_sub_page_html = fs.readFileSync("custom_sub/amnezia.html").toString();
@@ -631,6 +632,23 @@ app.post("/delete_user", async (req, res) => {
                 refundInfo = `Refund granted: !${amneziaCost} units (${remainingDays} days remaining)`;
             } else {
                 refundInfo = "No refund (usage > 150MB)";
+            }
+            
+            // Delete user from Amnezia wrapper using delete_vpn function
+            try {
+                // Use the delete_vpn function to delete the user from Amnezia
+                const amneziaUrl = panel_obj.panel_url;
+                const amneziaUsername = panel_obj.panel_username;
+                const amneziaPassword = panel_obj.panel_password;
+                
+                const result = await delete_vpn(amneziaUrl, amneziaUsername, amneziaPassword, username);
+                if (result === "ERR") {
+                    console.error(`Failed to delete user ${username} from Amnezia`);
+                } else {
+                    console.log(`Successfully deleted user ${username} from Amnezia`);
+                }
+            } catch (err) {
+                console.error(`Error deleting user ${username} from Amnezia:`, err.message);
             }
         }
         
