@@ -97,26 +97,12 @@ const get_user_traffic_from_wg_cli = async (public_key) =>
     try
     {
         var container_id = await get_amnezia_container_id();
-        if(!container_id) throw new Error("Amnezia container not found");
-
-        // Use sh -c to allow fallback without failing when grep finds nothing
-        var data = await exec_on_container_sh(container_id,`wg show wg0 transfer | grep -F "${public_key}" || true`);
-
-        if(!data)
-        {
-            return 0;
-        }
-
-        var data_arr = data.split(/\s+/);
-        if(data_arr.length < 3)
-        {
-            return 0;
-        }
-
-        var received = parseInt(data_arr[1],10) || 0;
-        var sent = parseInt(data_arr[2],10) || 0;
+        var data = await exec_on_container(container_id,`wg show wg0 transfer | grep ${public_key}`);
+        var data_arr = data.split("\t");
+        var received = data_arr[1];
+        var sent = data_arr[2];
         console.log(`Received: ${received}, Sent: ${sent}`);
-        return received + sent;
+        return parseInt(received) + parseInt(sent);
     }
 
     catch(err)
@@ -558,48 +544,24 @@ const delete_user = async (username) =>
 
     var interface = await get_wg0_interface();
     var clients_table = await get_amnezia_clients_table();
-    
-    // Find user in database to get public_key
-    let user_obj = await User.findOne({username});
-    
-    // اگر کاربر در دیتابیس نیست، از clients_table یا wg0.conf public_key را بگیریم
-    let public_key = null;
-    
-    if (user_obj) {
-        public_key = user_obj.public_key;
-    } else {
-        // Try to find in clients table
-        const clientEntry = clients_table.find(item => item.userData.clientName === username);
-        if (clientEntry && clientEntry.clientId) {
-            // clientId در Amnezia همان public_key است
-            public_key = clientEntry.clientId;
-        }
-    }
-    
-    if (!public_key) {
-        throw new Error("User not found and public key cannot be determined");
-    }
+    const user_obj = await User.findOne({username});
+    if(!user_obj) throw new Error("User not found");
+    var public_key = user_obj.public_key;
 
-    // Remove user from clients table if exists
     clients_table = clients_table.filter((item) => item.userData.clientName != username);
 
     var interface_lines = interface.split("\n");
 
     for(var i=0;i<interface_lines.length;i++)
     {
-        // Check both regular and commented lines for public key
-        var line = interface_lines[i];
-        var trimmed_line = line.trim();
-        
-        // Check if this line contains the public key (both regular and commented)
-        if((trimmed_line.startsWith('PublicKey = ') && trimmed_line.includes(public_key)) ||
-           (trimmed_line.startsWith('#PublicKey = ') && trimmed_line.includes(public_key)))
+        // Check both regular and commented lines
+        if(interface_lines[i].includes(public_key))
         {
             // Find the start of the peer block (look for [Peer] line, both regular and commented)
             var peer_start_index = i;
             for(var j = i; j >= 0; j--) {
-                var trimmed_peer_line = interface_lines[j].trim();
-                if(trimmed_peer_line === "[Peer]" || trimmed_peer_line === "#[Peer]") {
+                var trimmed_line = interface_lines[j].trim();
+                if(trimmed_line === "[Peer]" || trimmed_line === "#[Peer]") {
                     peer_start_index = j;
                     break;
                 }
@@ -624,11 +586,7 @@ const delete_user = async (username) =>
 
     await sync_configs();
 
-    // Delete from database only if user exists there
-    if (user_obj) {
-        await User.deleteOne({ username });
-    }
-    
+    await User.deleteOne({ username });
     return true;
 }
 
@@ -969,63 +927,53 @@ const $sync_accounting = async () =>
         if(user.status != "active")
         {
             var public_key_line_index = interface_lines.findIndex((item) => item.includes(user.public_key));
-            if(public_key_line_index !== -1) 
+            if(public_key_line_index !== -1 && !interface_lines[public_key_line_index + 2].startsWith("#")) 
             {
-                // Check if peer is already commented
-                var is_already_commented = interface_lines[public_key_line_index].trim().startsWith("#");
-                
-                if (!is_already_commented) {
-                    // Find the start of the peer block (look for [Peer] line)
-                    var peer_start_index = public_key_line_index;
-                    for(var i = public_key_line_index; i >= 0; i--) {
-                        var trimmed_line = interface_lines[i].trim();
-                        if(trimmed_line === "[Peer]" || trimmed_line === "#[Peer]") {
-                            peer_start_index = i;
-                            break;
-                        }
+                // Find the start of the peer block (look for [Peer] line)
+                var peer_start_index = public_key_line_index;
+                for(var i = public_key_line_index; i >= 0; i--) {
+                    var trimmed_line = interface_lines[i].trim();
+                    if(trimmed_line === "[Peer]" || trimmed_line === "#[Peer]") {
+                        peer_start_index = i;
+                        break;
                     }
-                    
-                    // Comment the peer block lines (from [Peer] to AllowedIPs)
-                    interface_lines[peer_start_index] = "#" + interface_lines[peer_start_index];
-                    interface_lines[peer_start_index + 1] = "#" + interface_lines[peer_start_index + 1];
-                    interface_lines[peer_start_index + 2] = "#" + interface_lines[peer_start_index + 2];
-                    interface_lines[peer_start_index + 3] = "#" + interface_lines[peer_start_index + 3];
-
-                    await replace_wg0_interface(interface_lines.join("\n"));
-                    await sync_configs();
-                    console.log(`UPDATED INTERFACE FOR ${user.username}`);
                 }
+                
+                // Comment the peer block lines (from [Peer] to AllowedIPs)
+                interface_lines[peer_start_index] = "#" + interface_lines[peer_start_index];
+                interface_lines[peer_start_index + 1] = "#" + interface_lines[peer_start_index + 1];
+                interface_lines[peer_start_index + 2] = "#" + interface_lines[peer_start_index + 2];
+                interface_lines[peer_start_index + 3] = "#" + interface_lines[peer_start_index + 3];
+
+                await replace_wg0_interface(interface_lines.join("\n"));
+                await sync_configs();
+                console.log(`UPDATED INTERFACE FOR ${user.username}`);
             }
         }
 
         else
         {
             var public_key_line_index = interface_lines.findIndex((item) => item.includes(user.public_key));
-            if(public_key_line_index !== -1) 
+            if(public_key_line_index !== -1 && interface_lines[public_key_line_index + 2].startsWith("#")) 
             {
-                // Check if peer is commented
-                var is_commented = interface_lines[public_key_line_index].trim().startsWith("#");
-                
-                if (is_commented) {
-                    // Find the start of the peer block (look for [Peer] line)
-                    var peer_start_index = public_key_line_index;
-                    for(var i = public_key_line_index; i >= 0; i--) {
-                        if(interface_lines[i].trim() === "[Peer]" || interface_lines[i].trim() === "#[Peer]") {
-                            peer_start_index = i;
-                            break;
-                        }
+                // Find the start of the peer block (look for [Peer] line)
+                var peer_start_index = public_key_line_index;
+                for(var i = public_key_line_index; i >= 0; i--) {
+                    if(interface_lines[i].trim() === "[Peer]" || interface_lines[i].trim() === "#[Peer]") {
+                        peer_start_index = i;
+                        break;
                     }
-                    
-                    // Uncomment the peer block lines (from [Peer] to AllowedIPs)
-                    interface_lines[peer_start_index] = interface_lines[peer_start_index].replace("#","");
-                    interface_lines[peer_start_index + 1] = interface_lines[peer_start_index + 1].replace("#","");
-                    interface_lines[peer_start_index + 2] = interface_lines[peer_start_index + 2].replace("#","");
-                    interface_lines[peer_start_index + 3] = interface_lines[peer_start_index + 3].replace("#","");
-
-                    await replace_wg0_interface(interface_lines.join("\n"));
-                    await sync_configs();
-                    console.log(`UPDATED INTERFACE FOR ${user.username}`);
                 }
+                
+                // Uncomment the peer block lines (from [Peer] to AllowedIPs)
+                interface_lines[peer_start_index] = interface_lines[peer_start_index].replace("#","");
+                interface_lines[peer_start_index + 1] = interface_lines[peer_start_index + 1].replace("#","");
+                interface_lines[peer_start_index + 2] = interface_lines[peer_start_index + 2].replace("#","");
+                interface_lines[peer_start_index + 3] = interface_lines[peer_start_index + 3].replace("#","");
+
+                await replace_wg0_interface(interface_lines.join("\n"));
+                await sync_configs();
+                console.log(`UPDATED INTERFACE FOR ${user.username}`);
             }
         }
 

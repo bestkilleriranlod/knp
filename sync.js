@@ -93,86 +93,23 @@ const sync_amnezia_traffic = async () => {
                 
                 if (used_traffic !== false && used_traffic !== user.last_captured_traffic) {
                     let new_used_traffic = user.used_traffic;
-                    let update_type = '';
                     
                     if (used_traffic < user.used_traffic) {
                         // Incremental update
                         const incremental_value = used_traffic > user.last_captured_traffic ? 
                             used_traffic - user.last_captured_traffic : used_traffic;
                         new_used_traffic = user.used_traffic + incremental_value;
-                        update_type = 'increment';
                     } else if (used_traffic > user.used_traffic) {
                         // Replace update
                         new_used_traffic = used_traffic;
-                        update_type = 'replace';
                     }
                     
-                    // Update Amnezia database
                     await AmneziaUser.updateOne({username: user.username}, {
                         used_traffic: new_used_traffic,
                         last_captured_traffic: used_traffic
                     });
                     
-                    console.log(`📊 User ${user.username} traffic updated: ${b2gb(new_used_traffic)} MB (${update_type})`);
-                    
-                    // Also update KNP panel database for this user
-                    try {
-                        const knp_user = await get_user2(user.username);
-                        if (knp_user) {
-                            const traffic_difference = new_used_traffic - knp_user.used_traffic;
-                            
-                            // Update user traffic in KNP database
-                            await update_user(knp_user.id, {
-                                used_traffic: new_used_traffic,
-                                lifetime_used_traffic: knp_user.lifetime_used_traffic + traffic_difference
-                            });
-                            
-                            // Update agent volume and daily logs (only for accounts 6 days or less old)
-                            const days_since_creation = Math.floor((Date.now() / 1000 - knp_user.created_at) / (24 * 60 * 60));
-                            
-                            if (days_since_creation <= 6) {
-                                const agent = await get_account(knp_user.agent_id);
-                                if (agent) {
-                                    // Deduct traffic from agent volume
-                                    agent.volume -= traffic_difference;
-                                    
-                                    // Update daily usage logs
-                                    const tehran0000 = moment.tz("Asia/Tehran");
-                                    tehran0000.set({ hour:0, minute:0, second:0, millisecond: 0 });
-                                    const tehran0000_timestamp = tehran0000.unix();
-                                    
-                                    let daily_usage_logs = await get_agent_daily_usage_logs(agent.id);
-                                    let existance_flag = false;
-                                    
-                                    for(let usage_log of daily_usage_logs) {
-                                        if(usage_log.date == tehran0000_timestamp) {
-                                            existance_flag = true;
-                                            usage_log.volume += traffic_difference;
-                                            break;
-                                        }
-                                    }
-                                    
-                                    if(!existance_flag) {
-                                        daily_usage_logs.push({
-                                            date: tehran0000_timestamp,
-                                            volume: traffic_difference
-                                        });
-                                    }
-                                    
-                                    await update_account(agent.id, { 
-                                        volume: agent.volume,
-                                        daily_usage_logs,
-                                    });
-                                    
-                                    console.log(`📊 Agent ${agent.username} updated for user ${user.username} traffic`);
-                                }
-                            } else {
-                                console.log(`Account ${user.username} is ${days_since_creation} days old (>6 days), skipping agent traffic accounting`);
-                            }
-                        }
-                    } catch (knp_error) {
-                        console.error(`⚠️ Could not update KNP database for user ${user.username}:`, knp_error.message);
-                    }
+                    console.log(`📊 User ${user.username} traffic updated: ${b2gb(new_used_traffic)} MB`);
                 }
                 
             } catch (error) {
