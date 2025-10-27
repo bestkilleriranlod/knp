@@ -97,12 +97,26 @@ const get_user_traffic_from_wg_cli = async (public_key) =>
     try
     {
         var container_id = await get_amnezia_container_id();
-        var data = await exec_on_container(container_id,`wg show wg0 transfer | grep ${public_key}`);
-        var data_arr = data.split("\t");
-        var received = data_arr[1];
-        var sent = data_arr[2];
+        if(!container_id) throw new Error("Amnezia container not found");
+
+        // Use sh -c to allow fallback without failing when grep finds nothing
+        var data = await exec_on_container_sh(container_id,`wg show wg0 transfer | grep -F "${public_key}" || true`);
+
+        if(!data)
+        {
+            return 0;
+        }
+
+        var data_arr = data.split(/\s+/);
+        if(data_arr.length < 3)
+        {
+            return 0;
+        }
+
+        var received = parseInt(data_arr[1],10) || 0;
+        var sent = parseInt(data_arr[2],10) || 0;
         console.log(`Received: ${received}, Sent: ${sent}`);
-        return parseInt(received) + parseInt(sent);
+        return received + sent;
     }
 
     catch(err)
@@ -541,13 +555,14 @@ const edit_user = async (username, status, expire, data_limit) =>
 
 const delete_user = async (username) =>
 {
+
     var interface = await get_wg0_interface();
     var clients_table = await get_amnezia_clients_table();
     
     // Find user in database to get public_key
     let user_obj = await User.findOne({username});
     
-    // اگر کاربر در دیتابیس نیست، از clients_table public_key را بگیریم
+    // اگر کاربر در دیتابیس نیست، از clients_table یا wg0.conf public_key را بگیریم
     let public_key = null;
     
     if (user_obj) {
@@ -568,58 +583,42 @@ const delete_user = async (username) =>
     // Remove user from clients table if exists
     clients_table = clients_table.filter((item) => item.userData.clientName != username);
 
-    // حذف peer از wg0.conf (مثل cleanup_orphaned_users)
     var interface_lines = interface.split("\n");
-    var cleanedLines = [];
-    let skipUntilNextPeer = false;
-    let currentPeerLines = [];
-    let currentPeerStartIndex = -1;
-    
-    for (let i = 0; i < interface_lines.length; i++) {
-        const line = interface_lines[i];
-        const trimmedLine = line.trim();
+
+    for(var i=0;i<interface_lines.length;i++)
+    {
+        // Check both regular and commented lines for public key
+        var line = interface_lines[i];
+        var trimmed_line = line.trim();
         
-        // شروع یک peer جدید
-        if (trimmedLine === '[Peer]' || trimmedLine === '#[Peer]') {
-            // اگر peer قبلی مال ما بود، نخواهیم آن را اضافه کردیم
-            if (skipUntilNextPeer === false && currentPeerLines.length > 0) {
-                cleanedLines.push(...currentPeerLines);
-            }
-            
-            currentPeerLines = [line];
-            currentPeerStartIndex = cleanedLines.length;
-            skipUntilNextPeer = false;
-            
-        } else if (currentPeerLines.length > 0) {
-            // در حال پر کردن peer فعلی
-            currentPeerLines.push(line);
-            
-            // بررسی اگر این خط شامل public_key ما است
-            if ((trimmedLine.startsWith('PublicKey = ') || trimmedLine.startsWith('#PublicKey = ')) &&
-                trimmedLine.includes(public_key)) {
-                skipUntilNextPeer = true;
-            }
-            
-            // انتهای peer (خط خالی)
-            if (trimmedLine === '' && currentPeerLines.length > 4) {
-                if (!skipUntilNextPeer) {
-                    cleanedLines.push(...currentPeerLines);
+        // Check if this line contains the public key (both regular and commented)
+        if((trimmed_line.startsWith('PublicKey = ') && trimmed_line.includes(public_key)) ||
+           (trimmed_line.startsWith('#PublicKey = ') && trimmed_line.includes(public_key)))
+        {
+            // Find the start of the peer block (look for [Peer] line, both regular and commented)
+            var peer_start_index = i;
+            for(var j = i; j >= 0; j--) {
+                var trimmed_peer_line = interface_lines[j].trim();
+                if(trimmed_peer_line === "[Peer]" || trimmed_peer_line === "#[Peer]") {
+                    peer_start_index = j;
+                    break;
                 }
-                currentPeerLines = [];
-                skipUntilNextPeer = false;
             }
-        } else {
-            // خطوط غیر peer
-            cleanedLines.push(line);
+            
+            // Remove the peer block lines (from [Peer] to AllowedIPs + empty line)
+            var lines_to_remove = 4; // [Peer], PublicKey, PresharedKey, AllowedIPs
+            // Check if there's an empty line after AllowedIPs
+            if(peer_start_index + 4 < interface_lines.length && 
+               interface_lines[peer_start_index + 4].trim() === "") {
+                lines_to_remove = 5; // Include the empty line
+            }
+            
+            interface_lines.splice(peer_start_index, lines_to_remove);
+            break;
         }
     }
-    
-    // اگر peer آخری هنوز ثبت نشده
-    if (currentPeerLines.length > 0 && !skipUntilNextPeer) {
-        cleanedLines.push(...currentPeerLines);
-    }
 
-    await replace_wg0_interface(cleanedLines.join("\n"));
+    await replace_wg0_interface(interface_lines.join("\n"));
 
     await replace_amnezia_clients_table(JSON.stringify(clients_table,null,4));
 
