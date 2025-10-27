@@ -544,28 +544,8 @@ app.post("/delete_user", async (req, res) => {
     if (agent_obj.disable) {res.send({ status: "ERR", msg: "your account is disabled" });return;}
     else if(!agent_obj.delete_access) {res.send({ status: "ERR", msg: "access denied" });return;}
     else if(!agent_obj.country.split(",").includes(user_obj.country)) {res.send({ status: "ERR", msg: "country access denied" });return;}
-    // Handle different panel types
-    var result;
-    if (panel_obj.panel_type == "AMN") {
-        // For Amnezia, call the API endpoint
-        try {
-            const axios = require('axios');
-            const response = await axios.delete(`${panel_obj.panel_url}/api/user/${username}`);
-            if (response.status === 200) {
-                result = "DONE";
-            } else {
-                result = "ERR";
-            }
-        } catch (err) {
-            console.log("Error deleting Amnezia user:", err.message);
-            result = "ERR";
-        }
-    } else {
-        // For Marzban, use the standard delete_vpn function
-        result = await delete_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, username);
-    }
-    
-    if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to panel" })
+    var result = await delete_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, username);
+    if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" })
     else {
         
         if(panel_obj.panel_type == "MZ")
