@@ -2,7 +2,6 @@ require('dotenv').config()
 const express = require('express'); const app = express();
 const fileUpload = require('express-fileupload');
 const fs = require('fs');
-const axios = require('axios');
 var AdmZip = require("adm-zip");
 var { accounts_clct, panels_clct, users_clct, logs_clct } = require('./db_interface');
 const amnezia_sub_page_html = fs.readFileSync("custom_sub/amnezia.html").toString();
@@ -65,7 +64,6 @@ const {
     make_zarinpal_gateway,
     verify_zarinpal_payment,
     get_last_payment,
-    auth_marzban,
 } = require("./utils");
 
 app.use(express.static('public'));
@@ -549,21 +547,6 @@ app.post("/delete_user", async (req, res) => {
     var result = await delete_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, username);
     if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" })
     else {
-        // اگر پنل از نوع Amnezia است، کاربر را از wg0.conf هم حذف کن
-        if(panel_obj.panel_type == "AMN") {
-            try {
-                // استفاده از API پنل Amnezia برای حذف کاربر
-                const headers = await auth_marzban(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password);
-                if (headers === "ERR") {
-                    console.log(`Failed to authenticate with Amnezia panel for user ${username}`);
-                } else {
-                    await axios.delete(`${panel_obj.panel_url}/api/user/${username}`, { headers });
-                    console.log(`Successfully deleted user ${username} from Amnezia`);
-                }
-            } catch (error) {
-                console.log(`Error deleting user ${username} from Amnezia:`, error.message);
-            }
-        }
         
         if(panel_obj.panel_type == "MZ")
         {
