@@ -41,6 +41,44 @@ const gb2b = (gb) =>
 
 const sleep = (seconds) => { return new Promise((resolve) => { setTimeout(resolve, seconds * 1000); }); }
 
+const exec = async (cmd) =>
+{
+
+    if (process.platform !== 'linux') 
+    {
+      return '';
+    }
+
+    return new Promise((resolve, reject) => 
+    {
+      child_process.exec(cmd, 
+      {
+        shell: 'bash',
+      }, 
+      (err, stdout) => 
+      {
+        if (err) return reject(err);
+        // console.log(stdout);
+        return resolve(String(stdout).trim());
+      });
+    });
+}
+
+const exec_on_container = async (container_id, cmd) =>
+{
+    return await exec(`docker exec ${container_id} ${cmd}`);
+}
+
+const exec_on_container_sh = async (container_id, cmd) =>
+{
+    return await exec(`docker exec ${container_id} sh -c "${cmd}"`);
+}
+
+const get_amnezia_container_id = async () =>
+{
+    return await exec("docker ps -qf name=amnezia-awg");
+}
+
 const format_amnezia_data_to_byte = (str) =>
 {
     if(!str) return 0;
@@ -510,15 +548,40 @@ const delete_user = async (username) =>
     if(!user_obj) throw new Error("User not found");
     var public_key = user_obj.public_key;
 
+    // Remove user from clients table if exists
     clients_table = clients_table.filter((item) => item.userData.clientName != username);
 
     var interface_lines = interface.split("\n");
 
     for(var i=0;i<interface_lines.length;i++)
     {
-        if(interface_lines[i].includes(public_key))
+        // Check both regular and commented lines for public key
+        var line = interface_lines[i];
+        var trimmed_line = line.trim();
+        
+        // Check if this line contains the public key (both regular and commented)
+        if((trimmed_line.startsWith('PublicKey = ') && trimmed_line.includes(public_key)) ||
+           (trimmed_line.startsWith('#PublicKey = ') && trimmed_line.includes(public_key)))
         {
-            interface_lines.splice(i-1,4);
+            // Find the start of the peer block (look for [Peer] line, both regular and commented)
+            var peer_start_index = i;
+            for(var j = i; j >= 0; j--) {
+                var trimmed_peer_line = interface_lines[j].trim();
+                if(trimmed_peer_line === "[Peer]" || trimmed_peer_line === "#[Peer]") {
+                    peer_start_index = j;
+                    break;
+                }
+            }
+            
+            // Remove the peer block lines (from [Peer] to AllowedIPs + empty line)
+            var lines_to_remove = 4; // [Peer], PublicKey, PresharedKey, AllowedIPs
+            // Check if there's an empty line after AllowedIPs
+            if(peer_start_index + 4 < interface_lines.length && 
+               interface_lines[peer_start_index + 4].trim() === "") {
+                lines_to_remove = 5; // Include the empty line
+            }
+            
+            interface_lines.splice(peer_start_index, lines_to_remove);
             break;
         }
     }
@@ -533,38 +596,6 @@ const delete_user = async (username) =>
     return true;
 }
 
-const exec = async (cmd) =>
-{
-
-    if (process.platform !== 'linux') 
-    {
-      return '';
-    }
-
-    return new Promise((resolve, reject) => 
-    {
-      child_process.exec(cmd, 
-      {
-        shell: 'bash',
-      }, 
-      (err, stdout) => 
-      {
-        if (err) return reject(err);
-        // console.log(stdout);
-        return resolve(String(stdout).trim());
-      });
-    });
-}
-
-const exec_on_container = async (container_id, cmd) =>
-{
-    return await exec(`docker exec ${container_id} ${cmd}`);
-}
-
-const exec_on_container_sh = async (container_id, cmd) =>
-{
-    return await exec(`docker exec ${container_id} sh -c "${cmd}"`);
-}
 
 const sync_configs = async () =>
 {
@@ -595,11 +626,6 @@ const get_amnezia_clients_table = async () =>
     var container_id = await get_amnezia_container_id();
     var clients_table_raw = await exec_on_container(container_id,"cat /opt/amnezia/awg/clientsTable");
     return JSON.parse(clients_table_raw);
-}
-
-const get_amnezia_container_id = async () =>
-{
-    return await exec("docker ps -qf name=amnezia-awg");
 }
 
 const replace_wg0_interface = async (new_config) =>
@@ -907,32 +933,63 @@ const $sync_accounting = async () =>
         if(user.status != "active")
         {
             var public_key_line_index = interface_lines.findIndex((item) => item.includes(user.public_key));
-            if(!interface_lines[public_key_line_index + 2].startsWith("#")) 
+            if(public_key_line_index !== -1) 
             {
-                interface_lines[public_key_line_index - 1] = "#"+interface_lines[public_key_line_index - 1];
-                interface_lines[public_key_line_index + 0] = "#"+interface_lines[public_key_line_index + 0];
-                interface_lines[public_key_line_index + 1] = "#"+interface_lines[public_key_line_index + 1];
-                interface_lines[public_key_line_index + 2] = "#"+interface_lines[public_key_line_index + 2];
+                // Check if peer is already commented
+                var is_already_commented = interface_lines[public_key_line_index].trim().startsWith("#");
+                
+                if (!is_already_commented) {
+                    // Find the start of the peer block (look for [Peer] line)
+                    var peer_start_index = public_key_line_index;
+                    for(var i = public_key_line_index; i >= 0; i--) {
+                        var trimmed_line = interface_lines[i].trim();
+                        if(trimmed_line === "[Peer]" || trimmed_line === "#[Peer]") {
+                            peer_start_index = i;
+                            break;
+                        }
+                    }
+                    
+                    // Comment the peer block lines (from [Peer] to AllowedIPs)
+                    interface_lines[peer_start_index] = "#" + interface_lines[peer_start_index];
+                    interface_lines[peer_start_index + 1] = "#" + interface_lines[peer_start_index + 1];
+                    interface_lines[peer_start_index + 2] = "#" + interface_lines[peer_start_index + 2];
+                    interface_lines[peer_start_index + 3] = "#" + interface_lines[peer_start_index + 3];
 
-                await replace_wg0_interface(interface_lines.join("\n"));
-                await sync_configs();
-                console.log(`UPDATED INTERFACE FOR ${user.username}`);
+                    await replace_wg0_interface(interface_lines.join("\n"));
+                    await sync_configs();
+                    console.log(`UPDATED INTERFACE FOR ${user.username}`);
+                }
             }
         }
 
         else
         {
             var public_key_line_index = interface_lines.findIndex((item) => item.includes(user.public_key));
-            if(interface_lines[public_key_line_index + 2].startsWith("#")) 
+            if(public_key_line_index !== -1) 
             {
-                interface_lines[public_key_line_index - 1] = interface_lines[public_key_line_index - 1].replace("#","");
-                interface_lines[public_key_line_index + 0] = interface_lines[public_key_line_index + 0].replace("#","");
-                interface_lines[public_key_line_index + 1] = interface_lines[public_key_line_index + 1].replace("#","");
-                interface_lines[public_key_line_index + 2] = interface_lines[public_key_line_index + 2].replace("#","");
+                // Check if peer is commented
+                var is_commented = interface_lines[public_key_line_index].trim().startsWith("#");
+                
+                if (is_commented) {
+                    // Find the start of the peer block (look for [Peer] line)
+                    var peer_start_index = public_key_line_index;
+                    for(var i = public_key_line_index; i >= 0; i--) {
+                        if(interface_lines[i].trim() === "[Peer]" || interface_lines[i].trim() === "#[Peer]") {
+                            peer_start_index = i;
+                            break;
+                        }
+                    }
+                    
+                    // Uncomment the peer block lines (from [Peer] to AllowedIPs)
+                    interface_lines[peer_start_index] = interface_lines[peer_start_index].replace("#","");
+                    interface_lines[peer_start_index + 1] = interface_lines[peer_start_index + 1].replace("#","");
+                    interface_lines[peer_start_index + 2] = interface_lines[peer_start_index + 2].replace("#","");
+                    interface_lines[peer_start_index + 3] = interface_lines[peer_start_index + 3].replace("#","");
 
-                await replace_wg0_interface(interface_lines.join("\n"));
-                await sync_configs();
-                console.log(`UPDATED INTERFACE FOR ${user.username}`);
+                    await replace_wg0_interface(interface_lines.join("\n"));
+                    await sync_configs();
+                    console.log(`UPDATED INTERFACE FOR ${user.username}`);
+                }
             }
         }
 
@@ -1010,6 +1067,13 @@ module.exports =
     unlock_user_account,
     restart_awg_container,
     update_users_subscription_desc,
+    get_wg0_interface,
+    get_amnezia_clients_table,
+    replace_wg0_interface,
+    replace_amnezia_clients_table,
+    sync_configs,
+    get_amnezia_container_id,
+    exec_on_container,
     
     $sync_accounting,
     User,
