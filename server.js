@@ -65,6 +65,7 @@ const {
     make_zarinpal_gateway,
     verify_zarinpal_payment,
     get_last_payment,
+    auth_marzban,
 } = require("./utils");
 
 app.use(express.static('public'));
@@ -548,6 +549,21 @@ app.post("/delete_user", async (req, res) => {
     var result = await delete_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, username);
     if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" })
     else {
+        // اگر پنل از نوع Amnezia است، کاربر را از wg0.conf هم حذف کن
+        if(panel_obj.panel_type == "AMN") {
+            try {
+                // استفاده از API پنل Amnezia برای حذف کاربر
+                const headers = await auth_marzban(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password);
+                if (headers === "ERR") {
+                    console.log(`Failed to authenticate with Amnezia panel for user ${username}`);
+                } else {
+                    await axios.delete(`${panel_obj.panel_url}/api/user/${username}`, { headers });
+                    console.log(`Successfully deleted user ${username} from Amnezia`);
+                }
+            } catch (error) {
+                console.log(`Error deleting user ${username} from Amnezia:`, error.message);
+            }
+        }
         
         if(panel_obj.panel_type == "MZ")
         {
@@ -632,23 +648,6 @@ app.post("/delete_user", async (req, res) => {
                 refundInfo = `Refund granted: !${amneziaCost} units (${remainingDays} days remaining)`;
             } else {
                 refundInfo = "No refund (usage > 150MB)";
-            }
-            
-            // Delete user from Amnezia wrapper using delete_vpn function
-            try {
-                // Use the delete_vpn function to delete the user from Amnezia
-                const amneziaUrl = panel_obj.panel_url;
-                const amneziaUsername = panel_obj.panel_username;
-                const amneziaPassword = panel_obj.panel_password;
-                
-                const result = await delete_vpn(amneziaUrl, amneziaUsername, amneziaPassword, username);
-                if (result === "ERR") {
-                    console.error(`Failed to delete user ${username} from Amnezia`);
-                } else {
-                    console.log(`Successfully deleted user ${username} from Amnezia`);
-                }
-            } catch (err) {
-                console.error(`Error deleting user ${username} from Amnezia:`, err.message);
             }
         }
         
