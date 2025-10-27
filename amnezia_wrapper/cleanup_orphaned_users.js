@@ -1,6 +1,5 @@
 require("dotenv").config();
 const mongoose = require('mongoose');
-const logger = require('./logger');
 const { 
     get_wg0_interface, 
     get_amnezia_clients_table, 
@@ -44,7 +43,7 @@ try {
  * چک کردن و حذف کاربران orphaned از فایل کانفیگ Amnezia
  */
 async function cleanupOrphanedUsers() {
-        logger.info('🔍 شروع بررسی کاربران orphaned...');
+        console.log('🔍 شروع بررسی کاربران orphaned...');
     
     try {
         // دریافت لیست کاربران از دیتابیس
@@ -52,7 +51,7 @@ async function cleanupOrphanedUsers() {
         const dbUsernames = dbUsers.map(user => user.username);
         const dbPublicKeys = dbUsers.map(user => user.public_key);
         
-        logger.info(`📊 تعداد کاربران در دیتابیس: ${dbUsernames.length}`);
+        console.log(`📊 تعداد کاربران در دیتابیس: ${dbUsernames.length}`);
         
         // دریافت فایل کانفیگ WireGuard
         const interface = await get_wg0_interface();
@@ -86,7 +85,7 @@ async function cleanupOrphanedUsers() {
             console.log('✅ کاربران orphaned از clients table حذف شدند');
         }
         
-        // پیدا کردن کاربران orphaned در فایل کانفیگ WireGuard
+        // پیدا کردن کاربران orphaned در فایل کانفیگ WireGuard (شامل کامنت‌شده‌ها)
         const orphanedInConfig = [];
         let currentPeer = null;
         let peerLines = [];
@@ -94,14 +93,15 @@ async function cleanupOrphanedUsers() {
         for (let i = 0; i < interfaceLines.length; i++) {
             const line = interfaceLines[i];
             
-            // شروع یک peer جدید
-            if (line.startsWith('[Peer]')) {
+            // شروع یک peer جدید (عادی یا کامنت‌شده)
+            if (line.trim() === '[Peer]' || line.trim() === '#[Peer]') {
                 if (currentPeer && peerLines.length > 0) {
                     // بررسی peer قبلی
-                    const hasValidPublicKey = peerLines.some(peerLine => 
-                        peerLine.startsWith('PublicKey = ') && 
-                        dbPublicKeys.includes(peerLine.split(' = ')[1])
-                    );
+                    const hasValidPublicKey = peerLines.some(peerLine => {
+                        const trimmedLine = peerLine.trim();
+                        return (trimmedLine.startsWith('PublicKey = ') || trimmedLine.startsWith('#PublicKey = ')) && 
+                               dbPublicKeys.includes(trimmedLine.split(' = ')[1]);
+                    });
                     
                     if (!hasValidPublicKey) {
                         orphanedInConfig.push({
@@ -114,18 +114,24 @@ async function cleanupOrphanedUsers() {
                 currentPeer = { startIndex: i };
                 peerLines = [line];
             } else if (currentPeer && (line.startsWith('PublicKey = ') || 
+                                    line.startsWith('#PublicKey = ') ||
                                     line.startsWith('PresharedKey = ') || 
+                                    line.startsWith('#PresharedKey = ') ||
                                     line.startsWith('AllowedIPs = ') || 
+                                    line.startsWith('#AllowedIPs = ') ||
                                     line.startsWith('Endpoint = ') || 
-                                    line.startsWith('PersistentKeepalive = '))) {
+                                    line.startsWith('#Endpoint = ') ||
+                                    line.startsWith('PersistentKeepalive = ') ||
+                                    line.startsWith('#PersistentKeepalive = '))) {
                 peerLines.push(line);
             } else if (currentPeer && (line.startsWith('[') || line.trim() === '')) {
                 // پایان peer
                 if (peerLines.length > 0) {
-                    const hasValidPublicKey = peerLines.some(peerLine => 
-                        peerLine.startsWith('PublicKey = ') && 
-                        dbPublicKeys.includes(peerLine.split(' = ')[1])
-                    );
+                    const hasValidPublicKey = peerLines.some(peerLine => {
+                        const trimmedLine = peerLine.trim();
+                        return (trimmedLine.startsWith('PublicKey = ') || trimmedLine.startsWith('#PublicKey = ')) && 
+                               dbPublicKeys.includes(trimmedLine.split(' = ')[1]);
+                    });
                     
                     if (!hasValidPublicKey) {
                         orphanedInConfig.push({
@@ -141,10 +147,11 @@ async function cleanupOrphanedUsers() {
         
         // بررسی آخرین peer
         if (currentPeer && peerLines.length > 0) {
-            const hasValidPublicKey = peerLines.some(peerLine => 
-                peerLine.startsWith('PublicKey = ') && 
-                dbPublicKeys.includes(peerLine.split(' = ')[1])
-            );
+            const hasValidPublicKey = peerLines.some(peerLine => {
+                const trimmedLine = peerLine.trim();
+                return (trimmedLine.startsWith('PublicKey = ') || trimmedLine.startsWith('#PublicKey = ')) && 
+                       dbPublicKeys.includes(trimmedLine.split(' = ')[1]);
+            });
             
             if (!hasValidPublicKey) {
                 orphanedInConfig.push({
@@ -159,9 +166,12 @@ async function cleanupOrphanedUsers() {
         if (orphanedInConfig.length > 0) {
             console.log('📋 Peer های orphaned در کانفیگ:');
             orphanedInConfig.forEach((peer, index) => {
-                const publicKeyLine = peer.lines.find(line => line.startsWith('PublicKey = '));
+                const publicKeyLine = peer.lines.find(line => 
+                    line.trim().startsWith('PublicKey = ') || line.trim().startsWith('#PublicKey = ')
+                );
                 const publicKey = publicKeyLine ? publicKeyLine.split(' = ')[1] : 'نامشخص';
-                console.log(`   - Peer ${index + 1}: ${publicKey}`);
+                const isCommented = publicKeyLine && publicKeyLine.trim().startsWith('#');
+                console.log(`   - Peer ${index + 1}: ${publicKey} ${isCommented ? '(کامنت‌شده)' : ''}`);
             });
             
             // حذف peer های orphaned از کانفیگ

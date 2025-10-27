@@ -544,8 +544,23 @@ app.post("/delete_user", async (req, res) => {
     if (agent_obj.disable) {res.send({ status: "ERR", msg: "your account is disabled" });return;}
     else if(!agent_obj.delete_access) {res.send({ status: "ERR", msg: "access denied" });return;}
     else if(!agent_obj.country.split(",").includes(user_obj.country)) {res.send({ status: "ERR", msg: "country access denied" });return;}
-    var result = await delete_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, username);
-    if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" })
+    // Handle different panel types
+    var result;
+    if (panel_obj.panel_type == "AMN") {
+        // For Amnezia, use the Amnezia delete_user function
+        const { delete_user: amnezia_delete_user } = require('./amnezia_wrapper/utils.js');
+        try {
+            await amnezia_delete_user(username);
+            result = "DONE";
+        } catch (err) {
+            result = "ERR";
+        }
+    } else {
+        // For Marzban, use the standard delete_vpn function
+        result = await delete_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, username);
+    }
+    
+    if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to panel" })
     else {
         
         if(panel_obj.panel_type == "MZ")
