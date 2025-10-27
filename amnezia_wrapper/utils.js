@@ -341,7 +341,7 @@ PersistentKeepalive = 25
                     "Jmin": `${Jmin_value}`,
                     "S1": `${S1_value}`,
                     "S2": `${S2_value}`,
-                    "last_config": `{\n    \"H1\": \"${H1_value}\",\n    \"H2\": \"${H2_value}\",\n    \"H3\": \"${H3_value}\",\n    \"H4\": \"${H4_value}\",\n    \"Jc\": \"${Jc_value}\",\n    \"Jmax\": \"${Jmax_value}\",\n    \"Jmin\": \"${Jmin_value}\",\n    \"S1\": \"${S1_value}\",\n    \"S2\": \"${S2_value}\",\n    \"allowed_ips\": [\n        \"0.0.0.0/0\",\n        \"::/0\"\n    ],\n    \"clientId\": \"${public_key}\",\n    \"client_ip\": \"${dedicated_ip.split("/")[0]}\",\n    \"client_priv_key\": \"${private_key}\",\n    \"client_pub_key\": \"${public_key}\",\n    \"config\": \"[Interface]\\nAddress = ${dedicated_ip}\\nDNS = $PRIMARY_DNS, $SECONDARY_DNS\\nPrivateKey = ${private_key}\\nJc = ${Jc_value}\\nJmin = ${Jmin_value}\\nJmax = ${Jmax_value}\\nS1 = ${S1_value}\\nS2 = ${S2_value}\\nH1 = ${H1_value}\\nH2 = ${H2_value}\\nH3 = ${H3_value}\\nH4 = ${H4_value}\\n\\n[Peer]\\nPublicKey = ${client_public_key}\\nPresharedKey = ${psk}\\nAllowedIPs = 0.0.0.0/0, ::/0\\nEndpoint = ${process.env.SERVER_ADDRESS}:${amnezia_port}\\nPersistentKeepalive = 25\\n\",\n    \"hostName\": \"${process.env.SERVER_ADDRESS}\",\n    \"mtu\": \"1280\",\n    \"persistent_keep_alive\": \"25\",\n    \"port\": ${amnezia_port},\n    \"psk_key\": \"${psk}\",\n    \"server_pub_key\": \"${client_public_key}\"\n}\n`,
+                    "last_config": `{\n    \"H1\": \"${H1_value}\",\n    \"H2\": \"${H2_value}\",\n    \"H3\": \"${H3_value}\",\n    \"H4\": \"${H4_value}\",\n    \"Jc\": \"${Jc_value}\",\n    \"Jmax\": \"${Jmax_value}\",\n    \"Jmin\": \"${Jmin_value}\",\n    \"S1\": \"${S1_value}\",\n    \"S2\": \"${S2_value}\",\n    \"allowed_ips\": [\n        \"0.0.0.0/0\",\n        \"::/0\"\n    ],\n    \"clientId\": \"${public_key}\",\n    \"client_ip\": \"${dedicated_ip.split("/")[0]}\",\n    \"client_priv_key\": \"${private_key}\",\n    \"client_pub_key\": \"${public_key}\",\n    \"config\": \"[Interface]\\nAddress = ${dedicated_ip}\\nDNS = $PRIMARY_DNS, $SECONDARY_DNS\\nPrivateKey = ${private_key}\\nJc = ${Jc_value}\\nJmin = ${Jmin_value}\\nJmax = ${Jmax_value}\\nS1 = ${S1_value}\\nS2 = ${S2_value}\\nH1 = ${H1_value}\\nH2 = ${H2_value}\\nH3 = ${H3_value}\\nH4 = ${H4_value}\\n\\n[Peer]\\nPresharedKey = ${psk}\\nAllowedIPs = 0.0.0.0/0, ::/0\\nEndpoint = ${process.env.SERVER_ADDRESS}:${amnezia_port}\\nPersistentKeepalive = 25\\n\",\n    \"hostName\": \"${process.env.SERVER_ADDRESS}\",\n    \"mtu\": \"1280\",\n    \"persistent_keep_alive\": \"25\",\n    \"port\": ${amnezia_port},\n    \"psk_key\": \"${psk}\",\n    \"server_pub_key\": \"${client_public_key}\"\n}\n`,
                     "port": `${amnezia_port}`,
                     "transport_proto": "udp"
                 },
@@ -541,6 +541,7 @@ const edit_user = async (username, status, expire, data_limit) =>
 
 const delete_user = async (username) =>
 {
+
     var interface = await get_wg0_interface();
     var clients_table = await get_amnezia_clients_table();
     
@@ -558,68 +559,59 @@ const delete_user = async (username) =>
         if (clientEntry && clientEntry.clientId) {
             // clientId در Amnezia همان public_key است
             public_key = clientEntry.clientId;
+        } else {
+            // آخرین تلاش: از wg0.conf جستجو کنید
+            // برای یافتن هرگونه peer با نام کاربری در یادداشت‌ها یا برای یافتن تمام peers
+            // اگر نام کاربری نتوانستیم پیدا کنیم، به دنبال آن نباشیم
+            console.log(`Warning: User ${username} not found in database or clients table`);
         }
-    }
-    
-    if (!public_key) {
-        throw new Error("User not found and public key cannot be determined");
     }
 
     // Remove user from clients table if exists
     clients_table = clients_table.filter((item) => item.userData.clientName != username);
 
-    // حذف peer از wg0.conf (مثل cleanup_orphaned_users)
-    var interface_lines = interface.split("\n");
-    var cleanedLines = [];
-    let skipUntilNextPeer = false;
-    let currentPeerLines = [];
-    let currentPeerStartIndex = -1;
-    
-    for (let i = 0; i < interface_lines.length; i++) {
-        const line = interface_lines[i];
-        const trimmedLine = line.trim();
-        
-        // شروع یک peer جدید
-        if (trimmedLine === '[Peer]' || trimmedLine === '#[Peer]') {
-            // اگر peer قبلی مال ما بود، نخواهیم آن را اضافه کردیم
-            if (skipUntilNextPeer === false && currentPeerLines.length > 0) {
-                cleanedLines.push(...currentPeerLines);
-            }
-            
-            currentPeerLines = [line];
-            currentPeerStartIndex = cleanedLines.length;
-            skipUntilNextPeer = false;
-            
-        } else if (currentPeerLines.length > 0) {
-            // در حال پر کردن peer فعلی
-            currentPeerLines.push(line);
-            
-            // بررسی اگر این خط شامل public_key ما است
-            if ((trimmedLine.startsWith('PublicKey = ') || trimmedLine.startsWith('#PublicKey = ')) &&
-                trimmedLine.includes(public_key)) {
-                skipUntilNextPeer = true;
-            }
-            
-            // انتهای peer (خط خالی)
-            if (trimmedLine === '' && currentPeerLines.length > 4) {
-                if (!skipUntilNextPeer) {
-                    cleanedLines.push(...currentPeerLines);
-                }
-                currentPeerLines = [];
-                skipUntilNextPeer = false;
-            }
-        } else {
-            // خطوط غیر peer
-            cleanedLines.push(line);
-        }
-    }
-    
-    // اگر peer آخری هنوز ثبت نشده
-    if (currentPeerLines.length > 0 && !skipUntilNextPeer) {
-        cleanedLines.push(...currentPeerLines);
-    }
+    // اگر public_key پیدا شد، peer را حذف کنید
+    if (public_key) {
+        var interface_lines = interface.split("\n");
 
-    await replace_wg0_interface(cleanedLines.join("\n"));
+        for(var i=0;i<interface_lines.length;i++)
+        {
+            // Check both regular and commented lines for public key
+            var line = interface_lines[i];
+            var trimmed_line = line.trim();
+            
+            // Check if this line contains the public key (both regular and commented)
+            if((trimmed_line.startsWith('PublicKey = ') && trimmed_line.includes(public_key)) ||
+               (trimmed_line.startsWith('#PublicKey = ') && trimmed_line.includes(public_key)))
+            {
+                // Find the start of the peer block (look for [Peer] line, both regular and commented)
+                var peer_start_index = i;
+                for(var j = i; j >= 0; j--) {
+                    var trimmed_peer_line = interface_lines[j].trim();
+                    if(trimmed_peer_line === "[Peer]" || trimmed_peer_line === "#[Peer]") {
+                        peer_start_index = j;
+                        break;
+                    }
+                }
+                
+                // Peer block: [Peer], PublicKey, PresharedKey, AllowedIPs (4 lines minimum)
+                // May have empty line after AllowedIPs
+                var lines_to_remove = 4; // [Peer], PublicKey, PresharedKey, AllowedIPs
+                
+                // Check if there's an empty line after AllowedIPs
+                if(peer_start_index + 4 < interface_lines.length && 
+                   interface_lines[peer_start_index + 4].trim() === "") {
+                    lines_to_remove = 5; // Include the empty line
+                }
+                
+                interface_lines.splice(peer_start_index, lines_to_remove);
+                console.log(`Removed peer for ${username} from wg0.conf`);
+                break;
+            }
+        }
+
+        await replace_wg0_interface(interface_lines.join("\n"));
+    }
 
     await replace_amnezia_clients_table(JSON.stringify(clients_table,null,4));
 

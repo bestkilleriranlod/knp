@@ -38,6 +38,7 @@ const {
     get_panel_info,
     make_vpn,
     delete_vpn,
+    delete_user,
     disable_vpn,
     enable_vpn,
     edit_vpn,
@@ -632,6 +633,14 @@ app.post("/delete_user", async (req, res) => {
             } else {
                 refundInfo = "No refund (usage > 150MB)";
             }
+        }
+        
+        // Call delete_user from amnezia_wrapper to remove peer from wg0.conf
+        // This must be done BEFORE deleting from database so we can get the user info
+        try {
+            await delete_user(username);
+        } catch (e) {
+            console.log(`Warning: Could not delete user from Amnezia: ${e.message}`);
         }
         
         await (await users_clct()).deleteOne({ username });
