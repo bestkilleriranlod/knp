@@ -669,8 +669,13 @@ app.post("/disable_user", async (req, res) => {
     var user_obj = await get_user1(user_id);
     var account = await token_to_account(access_token);
     var panel_obj = await get_panel(user_obj.corresponding_panel_id);
+    
+    // چک کردن وضعیت expire بودن کاربر
+    const isUserExpired = user_obj.expire < Math.floor(Date.now() / 1000);
+    
     if (account.disable) {res.send({ status: "ERR", msg: "your account is disabled" });return;}
     else if(!account.edit_access) {res.send({ status: "ERR", msg: "access denied" });return;}
+    else if(isUserExpired) {res.send({ status: "ERR", msg: "user account has expired" });return;}
     var result = await disable_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
     if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" });
     else {
@@ -703,9 +708,14 @@ app.post("/enable_user", async (req, res) => {
     var user_obj = await get_user1(user_id);
     var account = await token_to_account(access_token);
     var panel_obj = await get_panel(user_obj.corresponding_panel_id);
+    
+    // چک کردن وضعیت expire بودن کاربر
+    const isUserExpired = user_obj.expire < Math.floor(Date.now() / 1000);
+    
     if (account.disable) {res.send({ status: "ERR", msg: "your account is disabled" });return;}
     else if(!account.edit_access) {res.send({ status: "ERR", msg: "access denied" });return;}
     else if(!account.country.split(",").includes(user_obj.country)) {res.send({ status: "ERR", msg: "country access denied" });return;}
+    else if(isUserExpired) {res.send({ status: "ERR", msg: "user account has expired" });return;}
     var result = await enable_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
     if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" });
     else {
