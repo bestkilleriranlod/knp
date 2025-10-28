@@ -264,6 +264,14 @@ const UsersPage = () => {
 
     async function handlePowerUser(e, user_id, status) {
         e.stopPropagation()
+        
+        // جلوگیری از فعال/غیرفعال کردن کاربران منقضی شده
+        if (status === "expired") {
+            setError_msg("Cannot enable/disable expired users. Please renew the user first.")
+            setHasError(true)
+            return
+        }
+        
         const access_token = sessionStorage.getItem("access_token")
         var req_res
         if (status === "active") req_res = await axios.post("/disable_user", { access_token, user_id })
