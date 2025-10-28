@@ -277,7 +277,14 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
         { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item.username) },
         // فقط دکمه Unlock Account برای اکانت‌های Amnezia نمایش داده شود
         ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item.id) }] : []),
-        { icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item.id, item.status) },
+        { 
+            icon: <PowerIcon />, 
+            type: "switch", 
+            label: "Power", 
+            className: "ghosted", 
+            onClick: (e) => onPowerItem(e, item.id, item.status),
+            disabled: item?.status === "expired" // غیرفعال کردن دکمه اگر کاربر منقضی شده
+        },
     ]
 
     const b2gb = (bytes) => {
@@ -366,8 +373,13 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                     ) : button.type === "switch" ? (
                         <FormControlLabel
                             key={index}
-                            onClick={button.onClick}
-                            control={<IOSSwitch sx={{ my: 1, mx: 2 }} checked={item ? Boolean(!item.disable) : false} />}
+                            onClick={button.disabled ? undefined : button.onClick}
+                            control={<IOSSwitch 
+                                sx={{ my: 1, mx: 2 }} 
+                                checked={item ? Boolean(!item.disable) : false} 
+                                disabled={button.disabled}
+                            />}
+                            style={{ opacity: button.disabled ? 0.5 : 1, cursor: button.disabled ? 'not-allowed' : 'pointer' }}
                         //Boolean(!item.disable)
                         />
                     ) : null
