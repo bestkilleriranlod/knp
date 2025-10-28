@@ -650,16 +650,13 @@ const update_users_subscription_desc = async () =>
     {
         if(user.connection_uuids.length == 0 && !user.has_been_unlocked && user.created_at + 86400 < get_now() && user.used_traffic == 0)
         {
-
-            const new_expire = user.expire + 86400;
-
             var subscription_url_raw = 
             {
                 config_version:1,
                 api_endpoint:`https://${process.env.ENDPOINT_ADDRESS}/sub`,
                 protocol:"awg",
                 name:process.env.COUNTRY_EMOJI + " " + user.username,
-                description:generate_desc(new_expire,user.maximum_connections),
+                description:generate_desc(user.expire,user.maximum_connections),
                 api_key:jwt.sign({username:user.username},SUB_JWT_SECRET),
             }
         
@@ -669,10 +666,9 @@ const update_users_subscription_desc = async () =>
             await User.updateOne({username: user.username},
             {
                 subscription_url,
-                expire: new_expire,
             });
 
-            console.log(`User ${user.username} subscription updated`);
+            console.log(`User ${user.username} subscription description updated`);
         }
     }
 
@@ -943,6 +939,7 @@ cron.schedule('0 0 * * *', () =>
 });
 
 
+
 const user_schema = new mongoose.Schema
 ({
     username: String,
@@ -995,6 +992,15 @@ module.exports =
     unlock_user_account,
     restart_awg_container,
     update_users_subscription_desc,
+    
+    // توابع مورد نیاز برای cleanup script
+    get_wg0_interface,
+    get_amnezia_clients_table,
+    replace_wg0_interface,
+    replace_amnezia_clients_table,
+    sync_configs,
+    get_amnezia_container_id,
+    exec_on_container,
     
     $sync_accounting,
     User,
