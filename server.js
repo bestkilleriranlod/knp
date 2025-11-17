@@ -475,7 +475,6 @@ app.post("/create_user", async (req, res) => {
                 safu:/*safu?1:0*/0,
                 desc,
                 ip_limit,
-                xray_real_subscription_url: mv.xray_real_subscription_url || "",
                 xray_subscription_url: mv.xray_subscription_url || "",
             });
 
@@ -1620,7 +1619,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 statusClass = "limited";
             }
             
-            const xrayLink = user_obj[0].xray_real_subscription_url || user_obj[0].xray_subscription_url || "";
+            const xrayLink = user_obj[0].xray_subscription_url || "";
             const html = amnezia_sub_page_html
                 .replaceAll("{{amnezia_config}}", user_obj[0].real_subscription_url)
                 .replaceAll("{{xray_subscription_url}}", xrayLink)
