@@ -1621,6 +1621,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             
             const html = amnezia_sub_page_html
                 .replaceAll("{{amnezia_config}}", user_obj[0].real_subscription_url)
+                .replaceAll("{{xray_subscription_url}}", user_obj[0].xray_subscription_url || "")
                 .replaceAll("{{username}}", username)
                 .replaceAll("{{days_remaining}}", daysRemaining)
                 .replaceAll("{{status}}", status)
