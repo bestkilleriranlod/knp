@@ -991,6 +991,23 @@ const backup_data = async () =>
     await fs.writeFile("./dbbu/amnezia_clients_table.json",JSON.stringify(amnezia_client_table,null,4));
     await fs.writeFile("./dbbu/amnezia_interface.conf",amnezia_interface);
 
+    let xrayBackedUp = false;
+    try
+    {
+        const xcid = await get_xray_container_id();
+        if(xcid && xcid.length > 0)
+        {
+            try { await fs.mkdir("./dbbu/xray"); } catch(err) {}
+            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/server.json ./dbbu/xray/server.json`); } catch(err) {}
+            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/clientsTable ./dbbu/xray/clientsTable`); } catch(err) {}
+            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/xray_public.key ./dbbu/xray/xray_public.key`); } catch(err) {}
+            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/xray_private.key ./dbbu/xray/xray_private.key`); } catch(err) {}
+            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/xray_short_id.key ./dbbu/xray/xray_short_id.key`); } catch(err) {}
+            xrayBackedUp = true;
+        }
+    }
+    catch(err) {}
+
     var zip = new AdmZip();
     var zip_id = Date.now();
     var final_file = "./dbbu/bu"+zip_id+".zip"
@@ -1001,12 +1018,28 @@ const backup_data = async () =>
     zip.addLocalFile("./.env");
     zip.addLocalFolder("/etc/nginx/sites-available","sites-available");
     zip.addLocalFolder("/etc/letsencrypt/live","live");
+    if(xrayBackedUp) {
+        try { zip.addLocalFolder("./dbbu/xray","xray"); } catch(err) {}
+    }
 
     zip.writeZip(final_file);
 
     await fs.unlink("./dbbu/users.json");
     await fs.unlink("./dbbu/amnezia_clients_table.json");
     await fs.unlink("./dbbu/amnezia_interface.conf");
+    if(xrayBackedUp)
+    {
+        try
+        {
+            const files = await fs.readdir("./dbbu/xray");
+            for(const f of files)
+            {
+                try { await fs.unlink(`./dbbu/xray/${f}`); } catch(err) {}
+            }
+            try { await fs.rmdir("./dbbu/xray"); } catch(err) {}
+        }
+        catch(err) {}
+    }
 
     return final_file;
 }
