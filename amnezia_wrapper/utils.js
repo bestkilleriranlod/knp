@@ -834,7 +834,7 @@ const sync_xray_from_db = async () =>
         };
         const xrayApiLink = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
         await User.updateOne({ username: u.username }, { xray_last_config: cfg, xray_real_subscription_url: xraySubReal, xray_subscription_url: xrayApiLink });
-        // real_subscription_url فقط AWG را شامل می‌شود؛ تغییری در آن برای Xray اعمال نمی‌شود.
+        
     }
     const clients = active.map(u=>build_xray_client_obj(u));
     if(!sconf.inbounds || !sconf.inbounds[0] || !sconf.inbounds[0].settings) return false;
