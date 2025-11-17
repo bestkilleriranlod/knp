@@ -140,7 +140,7 @@ const CreateUser = ({ onClose, showForm }) => {
                 setIsDataLimitDisabled(true)
                 setIsIpLimitDisabled(true)
                 setDataLimitValue(10000)
-                setIpLimitValue(5)
+                setIpLimitValue(3)
                 setExpireInputType("plan_selection")
                 
                 // برای اکانت‌های امنزیا، پروتکل‌ها را به طور خودکار انتخاب می‌کنیم

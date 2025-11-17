@@ -384,9 +384,8 @@ app.post("/create_user", async (req, res) => {
         ip_limit,
      } = req.body;
 
-     // TEMP
-     ip_limit = 5;
-     if(process.env.RELEASE == "ALI") ip_limit = 3;
+    // TEMP
+    ip_limit = 3;
 
 
         if(process.env.RELEASE == "ARMAN") flow_status = "xtls-rprx-vision";
@@ -1619,9 +1618,10 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 statusClass = "limited";
             }
             
+            const xrayLink = user_obj[0].xray_real_subscription_url || user_obj[0].xray_subscription_url || "";
             const html = amnezia_sub_page_html
                 .replaceAll("{{amnezia_config}}", user_obj[0].real_subscription_url)
-                .replaceAll("{{xray_subscription_url}}", user_obj[0].xray_real_subscription_url || "")
+                .replaceAll("{{xray_subscription_url}}", xrayLink)
                 .replaceAll("{{username}}", username)
                 .replaceAll("{{days_remaining}}", daysRemaining)
                 .replaceAll("{{status}}", status)
