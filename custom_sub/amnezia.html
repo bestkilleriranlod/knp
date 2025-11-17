@@ -412,6 +412,29 @@
                 </button>
             </div>
         </div>
+
+        <div class="card" style="margin-top:16px;">
+            <div class="header" style="margin-bottom:12px;">
+                <h2 style="font-size:18px;">Xray (Reality) Link</h2>
+            </div>
+            <div class="config-area">
+                <textarea type="text" id="xray-copy-text" readonly>{{xray_subscription_url}}</textarea>
+            </div>
+            <div class="buttons">
+                <button class="btn btn-primary" onclick="copyXrayToClipboard()">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5" />
+                    </svg>
+                    Copy
+                </button>
+                <button class="btn btn-success" onclick="importXray()">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15M9 12l3 3m0 0 3-3m-3 3V2.25" />
+                    </svg>
+                    Import
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- QR Code Modal -->
@@ -446,6 +469,24 @@
             setTimeout(() => {
                 notification.classList.remove('active');
             }, 3000);
+        }
+
+        function copyXrayToClipboard() {
+            const textArea = document.getElementById('xray-copy-text');
+            textArea.select();
+            document.execCommand('copy');
+            const notification = document.getElementById('copy-notification');
+            notification.classList.add('active');
+            setTimeout(() => {
+                notification.classList.remove('active');
+            }, 3000);
+        }
+
+        function importXray() {
+            const text = document.getElementById('xray-copy-text').value;
+            if(text && text.length > 0) {
+                window.location.href = text;
+            }
         }
 
         // Open QR modal
