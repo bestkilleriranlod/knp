@@ -279,11 +279,25 @@ PersistentKeepalive = 25
     var xray_uuid = unlock ? uuidv4() : uuidv4();
     var xray_last_config = xray_info ? build_xray_client_config_from(xray_uuid, xray_info) : "";
     var xray_port = xray_info ? xray_info.port : 443;
-    var xray_subscription_url = "";
+    var xray_real_subscription_url = "";
     if(xray_last_config && xray_info)
     {
         const tempUser = { xray_last_config };
-        xray_subscription_url = await build_xray_subscription_url_from(tempUser, xray_info);
+        xray_real_subscription_url = await build_xray_subscription_url_from(tempUser, xray_info);
+    }
+
+    var xray_subscription_url = "";
+    {
+        var xray_subscription_url_raw = 
+        {
+            config_version: 1,
+            api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
+            protocol: "xray",
+            name: process.env.COUNTRY_EMOJI + " " + username,
+            description: generate_desc(expire, ip_limit),
+            api_key: jwt.sign({ username, proto: "xray" }, SUB_JWT_SECRET),
+        };
+        xray_subscription_url = await encode_amnezia_data(JSON.stringify(xray_subscription_url_raw));
     }
 
     var subscription_url_raw = 
@@ -321,15 +335,6 @@ PersistentKeepalive = 25
                     "transport_proto": "udp"
                 },
                 "container": "amnezia-awg"
-            }
-            ,
-            {
-                "xray": {
-                    "last_config": xray_last_config,
-                    "port": `${xray_port}`,
-                    "transport_proto": "tcp"
-                },
-                "container": "amnezia-xray"
             }
         ],
         "defaultContainer": "amnezia-awg",
@@ -391,7 +396,9 @@ PersistentKeepalive = 25
             public_key: public_key,
             xray_uuid: xray_uuid,
             xray_last_config: xray_last_config,
+            xray_real_subscription_url: xray_real_subscription_url,
             xray_subscription_url: xray_subscription_url,
+            xray_enabled: true,
             connection_uuids: [],
             has_been_unlocked: true,
         });
@@ -411,7 +418,9 @@ PersistentKeepalive = 25
             maximum_connections: ip_limit,
             xray_uuid: xray_uuid,
             xray_last_config: xray_last_config,
+            xray_real_subscription_url: xray_real_subscription_url,
             xray_subscription_url: xray_subscription_url,
+            xray_enabled: true,
         });
     }
             
@@ -814,23 +823,18 @@ const sync_xray_from_db = async () =>
         }
         const cfg = build_xray_client_config_from(uidv, xinfo);
         const tempUser = { xray_last_config: cfg };
-        const xraySub = await build_xray_subscription_url_from(tempUser, xinfo);
-        await User.updateOne({ username: u.username }, { xray_last_config: cfg, xray_subscription_url: xraySub });
-        try
-        {
-            const decoded = await decode_amnezia_data(u.real_subscription_url);
-            if(decoded)
-            {
-                const obj = JSON.parse(decoded);
-                if(!obj.containers) obj.containers = [];
-                const idx = obj.containers.findIndex(c=>c && c.container === "amnezia-xray");
-                const xcont = { xray: { last_config: cfg, port: String(xinfo.port), transport_proto: "tcp" }, container: "amnezia-xray" };
-                if(idx >= 0) obj.containers[idx] = xcont; else obj.containers.push(xcont);
-                const encoded = await encode_amnezia_data(JSON.stringify(obj));
-                await User.updateOne({ username: u.username }, { real_subscription_url: encoded });
-            }
-        }
-        catch(err){}
+        const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
+        const xrayApiRaw = {
+            config_version: 1,
+            api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
+            protocol: "xray",
+            name: process.env.COUNTRY_EMOJI + " " + u.username,
+            description: generate_desc(u.expire, u.maximum_connections || 1),
+            api_key: jwt.sign({ username: u.username, proto: "xray" }, SUB_JWT_SECRET),
+        };
+        const xrayApiLink = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
+        await User.updateOne({ username: u.username }, { xray_last_config: cfg, xray_real_subscription_url: xraySubReal, xray_subscription_url: xrayApiLink });
+        // real_subscription_url فقط AWG را شامل می‌شود؛ تغییری در آن برای Xray اعمال نمی‌شود.
     }
     const clients = active.map(u=>build_xray_client_obj(u));
     if(!sconf.inbounds || !sconf.inbounds[0] || !sconf.inbounds[0].settings) return false;
@@ -841,24 +845,29 @@ const sync_xray_from_db = async () =>
     return true;
 }
 
-const get_real_subscription_url = async (api_key,installation_uuid) =>
+const get_real_subscription_url = async (api_key, installation_uuid) =>
 {
-    var decoded = jwt.verify(api_key, SUB_JWT_SECRET);
-    console.log(`===>Serving subscription url for ${decoded.username}`);
-    var user = await User.findOne({username: decoded.username});
-    // console.log(user);
+    const decoded = jwt.verify(api_key, SUB_JWT_SECRET);
+    const proto = decoded.proto || "awg";
+    console.log(`===> Serving ${proto} subscription for ${decoded.username}`);
+    const user = await User.findOne({ username: decoded.username });
+    if(!user) throw new Error("User not found");
+
+    const now = get_now();
+    if(user.status !== "active" || (user.expire || 0) < now) throw new Error("User expired");
+
     if(!user.connection_uuids.includes(installation_uuid))
     {
-        if(user.connection_uuids.length >= user.maximum_connections) throw new Error("Maximum connections reached");
-        else
-        {
-            await User.updateOne({username: user.username}, {connection_uuids: [...user.connection_uuids, installation_uuid]});
-        }
+        if((user.connection_uuids || []).length >= (user.maximum_connections || 1)) throw new Error("Maximum connections reached");
+        await User.updateOne({ username: user.username }, { connection_uuids: [ ...(user.connection_uuids || []), installation_uuid ] });
     }
 
-    return {
-        config: user.real_subscription_url,
-    }
+    let config = null;
+    if(proto === "xray") config = user.xray_real_subscription_url;
+    else config = user.real_subscription_url;
+
+    if(!config) throw new Error("Config not found for this protocol");
+    return { config };
 }
 
 const update_users_subscription_desc = async () =>
@@ -1181,6 +1190,7 @@ const user_schema = new mongoose.Schema
     xray_uuid: { type: String, default: "" },
     xray_enabled: { type: Boolean, default: false },
     xray_last_config: { type: String, default: "" },
+    xray_real_subscription_url: { type: String, default: "" },
     xray_subscription_url: { type: String, default: "" },
 
 },{collection: 'users',versionKey: false});
@@ -1235,6 +1245,7 @@ module.exports =
     sync_xray_from_db,
     exec_on_container,
     build_xray_subscription_url_from,
+    encode_amnezia_data,
     
     $sync_accounting,
     User,

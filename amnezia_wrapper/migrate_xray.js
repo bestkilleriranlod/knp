@@ -1,6 +1,7 @@
 require("dotenv").config();
 const crypto = require('crypto');
-const { User, sync_xray_from_db, get_xray_static_info, build_xray_client_config_from, build_xray_subscription_url_from } = require('./utils.js');
+const jwt = require('jsonwebtoken');
+const { User, sync_xray_from_db, get_xray_static_info, build_xray_client_config_from, build_xray_subscription_url_from, encode_amnezia_data } = require('./utils.js');
 
 const uuidv4 = () => {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -24,9 +25,19 @@ async function main() {
           const cfg = build_xray_client_config_from(id, xinfo);
           update.xray_last_config = cfg;
           const tempUser = { xray_last_config: cfg };
-          const xraySub = await build_xray_subscription_url_from(tempUser, xinfo);
-          update.xray_subscription_url = xraySub;
+          const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
+          update.xray_real_subscription_url = xraySubReal;
+          const xrayApiRaw = {
+            config_version: 1,
+            api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
+            protocol: "xray",
+            name: process.env.COUNTRY_EMOJI + " " + u.username,
+            description: "", // optional; can be set later
+            api_key: jwt.sign({ username: u.username, proto: "xray" }, process.env.SUB_JWT_SECRET),
+          };
+          update.xray_subscription_url = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
         }
+        update.xray_enabled = true;
         await User.updateOne({ username: u.username }, update);
         updated++;
       }
