@@ -475,6 +475,8 @@ app.post("/create_user", async (req, res) => {
                 safu:/*safu?1:0*/0,
                 desc,
                 ip_limit,
+                xray_real_subscription_url: mv.xray_real_subscription_url || "",
+                xray_subscription_url: mv.xray_subscription_url || "",
             });
 
             if(selected_panel.panel_type == "MZ") await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit) });

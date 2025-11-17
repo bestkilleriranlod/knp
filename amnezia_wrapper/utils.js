@@ -430,6 +430,8 @@ PersistentKeepalive = 25
     return {
         links: [connection_string],
         subscription_url: subscription_url,
+        xray_real_subscription_url: xray_real_subscription_url,
+        xray_subscription_url: xray_subscription_url,
     }
 
 }
