@@ -39,6 +39,7 @@ async function main()
     await sleep(20000);
 
     while (true) {
+        try {
         var panels_arr = await get_panels();
         for (let panel of panels_arr) {
             
@@ -284,7 +285,9 @@ async function main()
                 }
             }
         }
-
+        } catch (e) {
+            console.error("SYNC LOOP ERROR:", e.message || e);
+        }
 
         await sleep(90000);
     }

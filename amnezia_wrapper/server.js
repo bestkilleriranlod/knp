@@ -199,10 +199,19 @@ app1.post("/api/user/:vpn_name/reset", custom_handler(async (req, res) =>
 
 app1.post("/sub", custom_handler(async (req, res) =>
 {
-    const api_key = req.headers.authorization.split(" ")[1];
-    var {installation_uuid} = req.body;
-    if(!installation_uuid) throw "Installation uuid not provided";
-    res.send(await get_real_subscription_url(api_key,installation_uuid));
+    const authHeader = req.headers.authorization || "";
+    const parts = authHeader.split(" ");
+    if (parts.length !== 2 || !parts[1]) {
+        return res.status(401).send({ detail: "Invalid or missing authorization header" });
+    }
+    const api_key = parts[1];
+
+    const { installation_uuid } = req.body;
+    if (!installation_uuid) {
+        return res.status(400).send({ detail: "Installation uuid not provided" });
+    }
+
+    res.send(await get_real_subscription_url(api_key, installation_uuid));
 }));
 
 app1.post("/unlock/:vpn_name", custom_handler(async (req, res) =>

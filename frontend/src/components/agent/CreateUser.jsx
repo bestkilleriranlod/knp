@@ -218,7 +218,7 @@ const CreateUser = ({ onClose, showForm }) => {
         const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
         const desc = document.getElementById("desc").value
         // Use default IP limit values (field is hidden)
-        const ip_limit = panelType === "AMN" ? 5 : 2 // 5 for Amnezia, 2 for V2Ray
+        const ip_limit = panelType === "AMN" ? 1 : 2 // 1 for Amnezia, 2 for V2Ray
         
         // Since the protocols section is hidden, ensure protocols are set 
         // Make sure at least one protocol is selected
