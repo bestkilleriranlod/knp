@@ -11,6 +11,11 @@ const AdmZip = require('adm-zip');
 const jalali_moment = require('jalali-moment');
 const cron = require('node-cron');
 
+const PRIMARY_DNS = process.env.PRIMARY_DNS || "8.8.8.8";
+const SECONDARY_DNS = process.env.SECONDARY_DNS || "8.8.4.4";
+const AWG_ITIME = process.env.AWG_ITIME || "";
+const AWG_I1 = process.env.AWG_I1 || "";
+
 String.prototype.farsify = function()
 {
     return this.replace(/0/g, '۰').replace(/1/g, '۱').replace(/2/g, '۲').replace(/3/g, '۳').replace(/4/g, '۴').replace(/5/g, '۵').replace(/6/g, '۶').replace(/7/g, '۷').replace(/8/g, '۸').replace(/9/g, '۹');
@@ -64,7 +69,9 @@ const get_user_traffic_from_wg_cli = async (public_key) =>
         var data_arr = data.split("\t");
         var received = data_arr[1];
         var sent = data_arr[2];
-        console.log(`Received: ${received}, Sent: ${sent}`);
+        if (process.env.DEBUG_WG_TRAFFIC === "1") {
+            console.log(`Received: ${received}, Sent: ${sent}`);
+        }
         return parseInt(received) + parseInt(sent);
     }
 
@@ -200,8 +207,17 @@ const create_user = async (username, expire, data_limit, ip_limit, unlock=false)
     var private_key = await exec_on_container(docker_id,"wg genkey");
     var public_key = await exec_on_container(docker_id,`echo ${private_key} | wg pubkey`);
     var client_public_key = await exec_on_container(docker_id,`wg show wg0 public-key`);
-    var psk = await exec_on_container(docker_id,"wg show wg0 preshared-keys | head -n 1");
-    psk = psk.split("\t")[1];
+    let psk = "";
+    try {
+      let raw = await exec_on_container(docker_id, "wg show wg0 preshared-keys | head -n 1 || true");
+      raw = (raw || "").trim();
+      if (raw && raw.includes("\t")) {
+        psk = raw.split("\t")[1].trim();
+      }
+    } catch (e) {}
+    if (!psk) {
+      psk = (await exec_on_container(docker_id, "wg genpsk")).trim();
+    }
     
     var interface = await get_wg0_interface();
     var clients_table = await get_amnezia_clients_table();
@@ -232,7 +248,9 @@ const create_user = async (username, expire, data_limit, ip_limit, unlock=false)
     if(unlock)
     {
         new_interface = interface;
-        new_interface = new_interface.replace(`PublicKey = ${does_exist.public_key}`,`PublicKey = ${public_key}`);
+        new_interface = new_interface
+            .replace(`PublicKey = ${does_exist.public_key}`,`PublicKey = ${public_key}`)
+            .replace(`#PublicKey = ${does_exist.public_key}`,`#PublicKey = ${public_key}`);
     }
 
     else
@@ -255,7 +273,7 @@ AllowedIPs = ${dedicated_ip}
 
 [Interface]
 Address = ${dedicated_ip}
-DNS = 1.1.1.1, 1.0.0.1
+DNS = ${PRIMARY_DNS}, ${SECONDARY_DNS}
 PrivateKey = ${private_key}
 Jc = ${Jc_value}
 Jmin = ${Jmin_value}
@@ -266,6 +284,8 @@ H1 = ${H1_value}
 H2 = ${H2_value}
 H3 = ${H3_value}
 H4 = ${H4_value}
+Itime = ${AWG_ITIME}
+I1 = ${AWG_I1}
 
 [Peer]
 PublicKey = ${client_public_key}
@@ -275,29 +295,34 @@ Endpoint = ${process.env.SERVER_ADDRESS}:${amnezia_port}
 PersistentKeepalive = 25
 `;
 
-    var xray_info = await get_xray_static_info();
-    var xray_uuid = unlock ? uuidv4() : uuidv4();
-    var xray_last_config = xray_info ? build_xray_client_config_from(xray_uuid, xray_info) : "";
-    var xray_port = xray_info ? xray_info.port : 443;
+    const xray_available = await isXrayAvailable();
+    var xray_info = null;
+    var xray_uuid = "";
+    var xray_last_config = "";
     var xray_real_subscription_url = "";
-    if(xray_last_config && xray_info)
-    {
-        const tempUser = { xray_last_config };
-        xray_real_subscription_url = await build_xray_subscription_url_from(tempUser, xray_info);
-    }
-
     var xray_subscription_url = "";
+    if(xray_available)
     {
-        var xray_subscription_url_raw = 
+        xray_info = await get_xray_static_info();
+        xray_uuid = uuidv4();
+        xray_last_config = xray_info ? build_xray_client_config_from(xray_uuid, xray_info) : "";
+        if(xray_last_config && xray_info)
         {
-            config_version: 1,
-            api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
-            protocol: "xray",
-            name: process.env.COUNTRY_EMOJI + " " + username,
-            description: generate_desc(expire, ip_limit),
-            api_key: jwt.sign({ username, proto: "xray" }, SUB_JWT_SECRET),
-        };
-        xray_subscription_url = await encode_amnezia_data(JSON.stringify(xray_subscription_url_raw));
+            const tempUser = { xray_last_config };
+            xray_real_subscription_url = await build_xray_subscription_url_from(tempUser, xray_info);
+        }
+        {
+            var xray_subscription_url_raw = 
+            {
+                config_version: 1,
+                api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
+                protocol: "xray",
+                name: process.env.COUNTRY_EMOJI + " " + username,
+                description: generate_desc(expire, ip_limit),
+                api_key: jwt.sign({ username, proto: "xray" }, SUB_JWT_SECRET),
+            };
+            xray_subscription_url = await encode_amnezia_data(JSON.stringify(xray_subscription_url_raw));
+        }
     }
 
     var subscription_url_raw = 
@@ -339,10 +364,21 @@ PersistentKeepalive = 25
         ],
         "defaultContainer": "amnezia-awg",
         "description": "AWG Server",
-        "dns1": "1.1.1.1",
-        "dns2": "1.0.0.1",
+        "dns1": "${PRIMARY_DNS}",
+        "dns2": "${SECONDARY_DNS}",
         "hostName": `${process.env.SERVER_ADDRESS}`,
     }
+
+    try {
+        const lcObj = JSON.parse(real_subscription_url_raw.containers[0].awg.last_config);
+        lcObj.Itime = AWG_ITIME;
+        lcObj.I1 = AWG_I1;
+        lcObj.config = lcObj.config.replace("DNS = $PRIMARY_DNS, $SECONDARY_DNS", `DNS = ${PRIMARY_DNS}, ${SECONDARY_DNS}`)
+                                   .replace("\n\n[Peer]", `\nItime = ${AWG_ITIME}\nI1 = ${AWG_I1}\n\n[Peer]`);
+        real_subscription_url_raw.containers[0].awg.last_config = JSON.stringify(lcObj);
+        real_subscription_url_raw.dns1 = `${PRIMARY_DNS}`;
+        real_subscription_url_raw.dns2 = `${SECONDARY_DNS}`;
+    } catch(e) {}
 
     var real_subscription_url = await encode_amnezia_data(JSON.stringify(real_subscription_url_raw));
 
@@ -389,25 +425,27 @@ PersistentKeepalive = 25
 
     if(unlock)
     {
-        await User.updateOne({username},
-        {
+        const updateObj = {
             connection_string: connection_string,
             real_subscription_url: real_subscription_url,
             public_key: public_key,
-            xray_uuid: xray_uuid,
-            xray_last_config: xray_last_config,
-            xray_real_subscription_url: xray_real_subscription_url,
-            xray_subscription_url: xray_subscription_url,
-            xray_enabled: true,
             connection_uuids: [],
             has_been_unlocked: true,
-        });
+        };
+        if(xray_available)
+        {
+            updateObj.xray_uuid = xray_uuid;
+            updateObj.xray_last_config = xray_last_config;
+            updateObj.xray_real_subscription_url = xray_real_subscription_url;
+            updateObj.xray_subscription_url = xray_subscription_url;
+            updateObj.xray_enabled = true;
+        }
+        await User.updateOne({username}, updateObj);
     }
 
     else
     {
-        await User.create
-        ({
+        const createObj = {
             username: username,
             expire: expire,
             data_limit: data_limit,
@@ -416,21 +454,27 @@ PersistentKeepalive = 25
             real_subscription_url: real_subscription_url,
             public_key: public_key,
             maximum_connections: ip_limit,
-            xray_uuid: xray_uuid,
-            xray_last_config: xray_last_config,
-            xray_real_subscription_url: xray_real_subscription_url,
-            xray_subscription_url: xray_subscription_url,
-            xray_enabled: true,
-        });
+        };
+        if(xray_available)
+        {
+            createObj.xray_uuid = xray_uuid;
+            createObj.xray_last_config = xray_last_config;
+            createObj.xray_real_subscription_url = xray_real_subscription_url;
+            createObj.xray_subscription_url = xray_subscription_url;
+            createObj.xray_enabled = true;
+        }
+        await User.create(createObj);
     }
             
     await sync_configs();
-    await sync_xray_from_db();
+    await ensure_listen_port(amnezia_port);
+    if(xray_available) await sync_xray_from_db();
 
     return {
         links: [connection_string],
         subscription_url: subscription_url,
-        xray_subscription_url: xray_subscription_url,
+        xray_subscription_url: xray_available ? xray_subscription_url : "",
+        xray_real_subscription_url: xray_available ? xray_real_subscription_url : "",
     }
 
 }
@@ -439,6 +483,7 @@ const get_user_for_marzban = async (username) =>
 {
 
     const user = await User.findOne({username});
+    if(!user) throw new Error("User not found");
 
     const result =
     {
@@ -517,7 +562,7 @@ const reset_user_account = async (username) =>
 {
     const user_obj = await User.findOne({username});
     await User.updateOne({username}, {used_traffic: 0, lifetime_used_traffic: user_obj.lifetime_used_traffic + user_obj.used_traffic});
-    await sync_xray_from_db();
+    if(await isXrayAvailable()) await sync_xray_from_db();
     return true;
 }
 
@@ -526,7 +571,7 @@ const edit_user = async (username, status, expire, data_limit) =>
     if(status) 
     {
         await User.updateOne({username}, {status});
-        await sync_xray_from_db();
+        if(await isXrayAvailable()) await sync_xray_from_db();
         return true;
     }
 
@@ -535,12 +580,33 @@ const edit_user = async (username, status, expire, data_limit) =>
     if(get_days_left(user_obj.expire) != get_days_left(expire))
     {
         await User.updateOne({username}, {expire, data_limit, used_traffic: 0, lifetime_used_traffic: user_obj.lifetime_used_traffic + user_obj.used_traffic});
-        await sync_xray_from_db();
+        if(await isXrayAvailable())
+        {
+            const xinfo = await get_xray_static_info();
+            if(xinfo)
+            {
+                const newUuid = uuidv4();
+                const cfg = build_xray_client_config_from(newUuid, xinfo);
+                const tempUser = { xray_last_config: cfg };
+                const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
+                const xrayApiRaw = {
+                    config_version: 1,
+                    api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
+                    protocol: "xray",
+                    name: process.env.COUNTRY_EMOJI + " " + username,
+                    description: generate_desc(expire, user_obj.maximum_connections || 1),
+                    api_key: jwt.sign({ username: username, proto: "xray" }, SUB_JWT_SECRET),
+                };
+                const xrayApiLink = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
+                await User.updateOne({ username }, { xray_uuid: newUuid, xray_last_config: cfg, xray_real_subscription_url: xraySubReal, xray_subscription_url: xrayApiLink });
+            }
+            await sync_xray_from_db();
+        }
         return true;
     }
     
     await User.updateOne({username}, {data_limit, expire});
-    await sync_xray_from_db();
+    if(await isXrayAvailable()) await sync_xray_from_db();
     return true;
 }
 
@@ -573,7 +639,7 @@ const delete_user = async (username) =>
     await sync_configs();
 
     await User.deleteOne({ username });
-    await sync_xray_from_db();
+    if(await isXrayAvailable()) await sync_xray_from_db();
     return true;
 }
 
@@ -656,6 +722,26 @@ const replace_wg0_interface = async (new_config) =>
     await fs.unlink(`./temp${file_id}`);
 }
 
+const ensure_listen_port = async (expectedPort) =>
+{
+    var interface = await get_wg0_interface();
+    var lines = interface.split('\n');
+    for(let i=0;i<lines.length;i++)
+    {
+        if(lines[i].startsWith('ListenPort = '))
+        {
+            var current = lines[i].split(' = ')[1];
+            if(current !== expectedPort)
+            {
+                lines[i] = `ListenPort = ${expectedPort}`;
+                await replace_wg0_interface(lines.join('\n'));
+                await sync_configs();
+            }
+            break;
+        }
+    }
+}
+
 const replace_amnezia_clients_table = async (new_table) =>
 {
     var container_id = await get_amnezia_container_id();
@@ -668,6 +754,15 @@ const replace_amnezia_clients_table = async (new_table) =>
 const get_xray_container_id = async () =>
 {
     return await exec("docker ps -qf name=amnezia-xray");
+}
+
+const isXrayAvailable = async () => {
+    try {
+        const out = await exec("docker ps -qf name=amnezia-xray");
+        return out.trim().length > 0;
+    } catch(e) {
+        return false;
+    }
 }
 
 const get_xray_server_config = async () =>
@@ -697,7 +792,7 @@ const set_xray_port = async (new_port) =>
     if(!sconf || !sconf.inbounds || !sconf.inbounds[0]) return false;
     sconf.inbounds[0].port = new_port;
     await set_xray_server_config(sconf);
-    await sync_xray_from_db();
+    if(await isXrayAvailable()) await sync_xray_from_db();
     return true;
 }
 
@@ -739,10 +834,10 @@ const build_xray_client_config_from = (xray_uuid, info) =>
 {
     const XRAY_ADDR = process.env.XRAY_SERVER_ADDRESS || process.env.SERVER_ADDRESS;
     const obj = {
-        log: { loglevel: "error" },
         inbounds: [
             { listen: "127.0.0.1", port: 10808, protocol: "socks", settings: { udp: true } }
         ],
+        log: { loglevel: "error" },
         outbounds: [
             {
                 protocol: "vless",
@@ -751,20 +846,20 @@ const build_xray_client_config_from = (xray_uuid, info) =>
                         {
                             address: XRAY_ADDR,
                             port: info.port,
-                            users: [ { id: xray_uuid, flow: "xtls-rprx-vision", encryption: "none" } ]
+                            users: [ { encryption: "none", flow: "xtls-rprx-vision", id: xray_uuid } ]
                         }
                     ]
                 },
                 streamSettings: {
                     network: "tcp",
-                    security: "reality",
                     realitySettings: {
                         fingerprint: info.fingerprint,
-                        serverName: info.serverName,
                         publicKey: info.publicKey,
+                        serverName: info.serverName,
                         shortId: info.shortId,
                         spiderX: ""
-                    }
+                    },
+                    security: "reality"
                 }
             }
         ]
@@ -791,8 +886,8 @@ const build_xray_subscription_url_from = async (userLike, info) =>
         ],
         defaultContainer: "amnezia-xray",
         description: "Xray Server",
-        dns1: "1.1.1.1",
-        dns2: "1.0.0.1",
+        dns1: `${PRIMARY_DNS}`,
+        dns2: `${SECONDARY_DNS}`,
         hostName: XRAY_ADDR,
     };
     const encoded = await encode_amnezia_data(JSON.stringify(raw));
@@ -801,6 +896,7 @@ const build_xray_subscription_url_from = async (userLike, info) =>
 
 const sync_xray_from_db = async () =>
 {
+    if(!(await isXrayAvailable())) { console.log("Xray not found → skip sync_xray_from_db()"); return; }
     const now = get_now();
     const xinfo = await get_xray_static_info();
     const sconf = await get_xray_server_config();
@@ -839,6 +935,16 @@ const sync_xray_from_db = async () =>
     }
     const clients = active.map(u=>build_xray_client_obj(u));
     if(!sconf.inbounds || !sconf.inbounds[0] || !sconf.inbounds[0].settings) return false;
+    const oldClients = (sconf.inbounds[0].settings.clients) || [];
+    const normalize = (arr) => arr.map(c=>({ id: c.id, flow: c.flow })).sort((a,b)=> a.id.localeCompare(b.id) || a.flow.localeCompare(b.flow));
+    const beforeStr = JSON.stringify(normalize(oldClients));
+    const afterStr = JSON.stringify(normalize(clients));
+    if(beforeStr === afterStr)
+    {
+        await User.updateMany({ username: { $in: activeNames } }, { xray_enabled: true });
+        await User.updateMany({ username: { $nin: activeNames } }, { xray_enabled: false });
+        return true;
+    }
     sconf.inbounds[0].settings.clients = clients;
     await set_xray_server_config(sconf);
     await User.updateMany({ username: { $in: activeNames } }, { xray_enabled: true });
@@ -933,6 +1039,94 @@ const encode_amnezia_data = async (data) =>
     var result = await exec("python3 decoder.py -i ./temp"+temp_file_id+".json");
     await fs.unlink(`./temp${temp_file_id}.json`);
     return result;
+}
+
+const build_awg_subscription_raw = (cfg) =>
+{
+    const last = {
+        H1: cfg.H1,
+        H2: cfg.H2,
+        H3: cfg.H3,
+        H4: cfg.H4,
+        Jc: cfg.Jc,
+        Jmax: cfg.Jmax,
+        Jmin: cfg.Jmin,
+        S1: cfg.S1,
+        S2: cfg.S2,
+        Itime: AWG_ITIME,
+        I1: AWG_I1,
+        allowed_ips: ["0.0.0.0/0","::/0"],
+        clientId: cfg.public_key,
+        client_ip: cfg.dedicated_ip.split("/")[0],
+        client_priv_key: cfg.private_key,
+        client_pub_key: cfg.public_key,
+        config: `[Interface]\nAddress = ${cfg.dedicated_ip}\nDNS = ${PRIMARY_DNS}, ${SECONDARY_DNS}\nPrivateKey = ${cfg.private_key}\nJc = ${cfg.Jc}\nJmin = ${cfg.Jmin}\nJmax = ${cfg.Jmax}\nS1 = ${cfg.S1}\nS2 = ${cfg.S2}\nH1 = ${cfg.H1}\nH2 = ${cfg.H2}\nH3 = ${cfg.H3}\nH4 = ${cfg.H4}\nItime = ${AWG_ITIME}\nI1 = ${AWG_I1}\n\n[Peer]\nPublicKey = ${cfg.client_public_key}\nPresharedKey = ${cfg.psk}\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = ${process.env.SERVER_ADDRESS}:${cfg.amnezia_port}\nPersistentKeepalive = 25\n`,
+        hostName: `${process.env.SERVER_ADDRESS}`,
+        mtu: "1280",
+        persistent_keep_alive: "25",
+        port: cfg.amnezia_port,
+        psk_key: cfg.psk,
+        server_pub_key: cfg.client_public_key,
+    };
+    return {
+        containers: [
+            {
+                awg: {
+                    H1: cfg.H1,
+                    H2: cfg.H2,
+                    H3: cfg.H3,
+                    H4: cfg.H4,
+                    Jc: cfg.Jc,
+                    Jmax: cfg.Jmax,
+                    Jmin: cfg.Jmin,
+                    S1: cfg.S1,
+                    S2: cfg.S2,
+                    last_config: JSON.stringify(last),
+                    port: `${cfg.amnezia_port}`,
+                    transport_proto: "udp",
+                },
+                container: "amnezia-awg",
+            }
+        ],
+        defaultContainer: "amnezia-awg",
+        description: "AWG Server",
+        dns1: `${PRIMARY_DNS}`,
+        dns2: `${SECONDARY_DNS}`,
+        hostName: `${process.env.SERVER_ADDRESS}`,
+    };
+}
+
+const buildAwgConfigForUser = async (cfg) =>
+{
+    const connection_string = `
+
+[Interface]
+Address = ${cfg.dedicated_ip}
+DNS = ${PRIMARY_DNS}, ${SECONDARY_DNS}
+PrivateKey = ${cfg.private_key}
+Jc = ${cfg.Jc}
+Jmin = ${cfg.Jmin}
+Jmax = ${cfg.Jmax}
+S1 = ${cfg.S1}
+S2 = ${cfg.S2}
+H1 = ${cfg.H1}
+H2 = ${cfg.H2}
+H3 = ${cfg.H3}
+H4 = ${cfg.H4}
+Itime = ${AWG_ITIME}
+I1 = ${AWG_I1}
+
+[Peer]
+PublicKey = ${cfg.client_public_key}
+PresharedKey = ${cfg.psk}
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = ${process.env.SERVER_ADDRESS}:${cfg.amnezia_port}
+PersistentKeepalive = 25
+`;
+
+    const raw = build_awg_subscription_raw(cfg);
+    const real_subscription_url = await encode_amnezia_data(JSON.stringify(raw));
+    return { connection_string, real_subscription_url };
 }
 
 const get_next_available_ip = async () => {
@@ -1270,6 +1464,7 @@ module.exports =
     sync_configs,
     get_amnezia_container_id,
     get_xray_container_id,
+    isXrayAvailable,
     get_xray_server_config,
     set_xray_server_config,
     set_xray_port,
@@ -1280,6 +1475,8 @@ module.exports =
     exec_on_container,
     build_xray_subscription_url_from,
     encode_amnezia_data,
+    build_awg_subscription_raw,
+    buildAwgConfigForUser,
     
     $sync_accounting,
     User,

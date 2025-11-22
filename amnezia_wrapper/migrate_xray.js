@@ -1,7 +1,7 @@
 require("dotenv").config();
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { User, sync_xray_from_db, get_xray_static_info, build_xray_client_config_from, build_xray_subscription_url_from, encode_amnezia_data } = require('./utils.js');
+const { User, sync_xray_from_db, get_xray_static_info, build_xray_client_config_from, build_xray_subscription_url_from, encode_amnezia_data, isXrayAvailable } = require('./utils.js');
 
 const uuidv4 = () => {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -14,6 +14,7 @@ const uuidv4 = () => {
 
 async function main() {
   try {
+    if(!(await isXrayAvailable())) { console.log("Xray not found → skip migration"); process.exit(0); }
     const missing = await User.find({ $or: [{ xray_uuid: { $exists: false } }, { xray_uuid: "" }] }).lean();
     const xinfo = await get_xray_static_info();
     let updated = 0;

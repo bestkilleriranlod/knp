@@ -7,37 +7,15 @@ const {
     replace_amnezia_clients_table,
     sync_configs,
     get_amnezia_container_id,
-    exec_on_container
+    exec_on_container,
+    User,
+    sync_xray_from_db,
 } = require('./utils.js');
 
 // اتصال به دیتابیس
 mongoose.connect('mongodb://127.0.0.1:27017/knaw');
 
-const user_schema = new mongoose.Schema({
-    username: String,
-    expire: Number,
-    data_limit: Number,
-    used_traffic: { type: Number, default: 0 },
-    last_captured_traffic: { type: Number, default: 0 },
-    lifetime_used_traffic: { type: Number, default: 0 },
-    status: { type: String, default: "active", enum: ["active","limited","expired","disabled"] },
-    created_at: { type: Number, default: Date.now },
-    connection_string: { type: String, default: "" },
-    subscription_url: { type: String, default: "" },
-    real_subscription_url: { type: String, default: "" },
-    public_key: { type: String, default: "" },
-    maximum_connections: { type: Number, default: 1 },
-    connection_uuids: { type: Array, default: [] },
-    has_been_unlocked: { type: Boolean, default: false },
-}, {collection: 'users', versionKey: false});
-
-// تعریف مدل User (فقط اگر قبلاً تعریف نشده باشد)
-let User;
-try {
-    User = mongoose.model('User');
-} catch (error) {
-    User = mongoose.model('User', user_schema);
-}
+// استفاده از User تعریف شده در utils.js
 
 /**
  * چک کردن و حذف کاربران orphaned از فایل کانفیگ Amnezia
@@ -48,6 +26,7 @@ async function cleanupOrphanedUsers() {
     try {
         // دریافت لیست کاربران از دیتابیس
         const dbUsers = await User.find({}, 'username public_key');
+        const usernamesToCleanupXray = new Set();
         const dbUsernames = dbUsers.map(user => user.username);
         const dbPublicKeys = dbUsers.map(user => user.public_key);
         
@@ -80,6 +59,11 @@ async function cleanupOrphanedUsers() {
             const cleanedClientsTable = clientsTable.filter(item => 
                 dbUsernames.includes(item.userData.clientName)
             );
+            for(const item of orphanedClients){
+                if(item && item.userData && item.userData.clientName){
+                    usernamesToCleanupXray.add(item.userData.clientName);
+                }
+            }
             
             await replace_amnezia_clients_table(JSON.stringify(cleanedClientsTable, null, 4));
             console.log('✅ کاربران orphaned از clients table حذف شدند');
@@ -160,6 +144,17 @@ async function cleanupOrphanedUsers() {
                 });
             }
         }
+
+        for(const peer of orphanedInConfig){
+            const publicKeyLine = peer.lines.find(line => 
+                line.trim().startsWith('PublicKey = ') || line.trim().startsWith('#PublicKey = ')
+            );
+            const pk = publicKeyLine ? publicKeyLine.split(' = ')[1] : '';
+            if(pk){
+                const u = await User.findOne({ public_key: pk }, 'username');
+                if(u && u.username){ usernamesToCleanupXray.add(u.username); }
+            }
+        }
         
         console.log(`🗑️  تعداد peer های orphaned در کانفیگ: ${orphanedInConfig.length}`);
         
@@ -200,6 +195,20 @@ async function cleanupOrphanedUsers() {
         if (orphanedClients.length > 0 || orphanedInConfig.length > 0) {
             console.log('🔄 اعمال تغییرات...');
             await sync_configs();
+            if (usernamesToCleanupXray.size > 0) {
+                const usernames = Array.from(usernamesToCleanupXray);
+                await User.updateMany(
+                    { username: { $in: usernames } },
+                    {
+                        $set: {
+                            xray_enabled: false,
+                            xray_last_config: "",
+                            xray_real_subscription_url: "",
+                            xray_subscription_url: "",
+                        },
+                    },
+                );
+            }
             
             // restart کامل Amnezia AWG برای اطمینان
             const containerId = await get_amnezia_container_id();
@@ -207,6 +216,9 @@ async function cleanupOrphanedUsers() {
             await exec_on_container(containerId, 'sh -c "cd /opt/amnezia/awg/ && wg-quick up ./wg0.conf"');
             
             console.log('✅ تغییرات اعمال شد و Amnezia AWG restart شد');
+            if (usernamesToCleanupXray.size > 0) {
+                await sync_xray_from_db();
+            }
         } else {
             console.log('✅ هیچ کاربر orphaned یافت نشد');
         }
