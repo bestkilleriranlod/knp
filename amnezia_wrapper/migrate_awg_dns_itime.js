@@ -8,7 +8,7 @@ const {
 
 const PRIMARY_DNS = process.env.PRIMARY_DNS || '8.8.8.8';
 const SECONDARY_DNS = process.env.SECONDARY_DNS || '8.8.4.4';
-const AWG_ITIME = process.env.AWG_ITIME || '0';
+const AWG_ITIME = process.env.AWG_ITIME || '';
 const AWG_I1 = process.env.AWG_I1 || '';
 
 function parseKey(lines, key) {

@@ -82,6 +82,34 @@ const get_user_traffic_from_wg_cli = async (public_key) =>
     }
 }
 
+const get_wg_transfers_map = async () =>
+{
+    try
+    {
+        var container_id = await get_amnezia_container_id();
+        var data = await exec_on_container(container_id,`wg show wg0 transfer`);
+        const map = new Map();
+        const lines = String(data || "").split("\n");
+        for(const ln of lines)
+        {
+            const parts = ln.split("\t");
+            if(parts.length >= 3)
+            {
+                const pk = parts[0].trim();
+                const rx = parseInt(parts[1]);
+                const tx = parseInt(parts[2]);
+                if(pk) map.set(pk, (isNaN(rx)?0:rx) + (isNaN(tx)?0:tx));
+            }
+        }
+        return map;
+    }
+    catch(err)
+    {
+        console.log(err);
+        return new Map();
+    }
+}
+
 const get_now = () =>
 {
     return Math.floor(Date.now() / 1000);
@@ -304,7 +332,14 @@ PersistentKeepalive = 25
     if(xray_available)
     {
         xray_info = await get_xray_static_info();
-        xray_uuid = uuidv4();
+        if(!unlock)
+        {
+            xray_uuid = uuidv4();
+        }
+        else
+        {
+            xray_uuid = (does_exist && does_exist.xray_uuid) ? does_exist.xray_uuid : uuidv4();
+        }
         xray_last_config = xray_info ? build_xray_client_config_from(xray_uuid, xray_info) : "";
         if(xray_last_config && xray_info)
         {
@@ -312,31 +347,12 @@ PersistentKeepalive = 25
             xray_real_subscription_url = await build_xray_subscription_url_from(tempUser, xray_info);
         }
         {
-            var xray_subscription_url_raw = 
-            {
-                config_version: 1,
-                api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
-                protocol: "xray",
-                name: process.env.COUNTRY_EMOJI + " " + username,
-                description: generate_desc(expire, ip_limit),
-                api_key: jwt.sign({ username, proto: "xray" }, SUB_JWT_SECRET),
-            };
-            xray_subscription_url = await encode_amnezia_data(JSON.stringify(xray_subscription_url_raw));
+            xray_subscription_url = await build_xray_subscription_url({ username, expire, maximum_connections: ip_limit });
         }
     }
 
-    var subscription_url_raw = 
-    {
-        config_version:1,
-        api_endpoint:`https://${process.env.ENDPOINT_ADDRESS}/sub`,
-        protocol:"awg",
-        name:process.env.COUNTRY_EMOJI + " " + username,
-        description:generate_desc(expire,ip_limit),
-        api_key:jwt.sign({username},SUB_JWT_SECRET),
-    }
-
     var subscription_url = null;
-    if(!unlock) subscription_url = await encode_amnezia_data(JSON.stringify(subscription_url_raw));
+    if(!unlock) subscription_url = await build_awg_subscription_url({ username, expire, maximum_connections: ip_limit });
 
     console.log(subscription_url);
 
@@ -422,6 +438,7 @@ PersistentKeepalive = 25
     await replace_wg0_interface(new_interface);
         
     await replace_amnezia_clients_table(JSON.stringify(clients_table,null,4));
+    await sync_configs();
 
     if(unlock)
     {
@@ -432,12 +449,13 @@ PersistentKeepalive = 25
             connection_uuids: [],
             has_been_unlocked: true,
         };
+        updateObj.subscription_url = await build_awg_subscription_url({ username, expire: does_exist.expire, maximum_connections: does_exist.maximum_connections || 1 });
         if(xray_available)
         {
             updateObj.xray_uuid = xray_uuid;
             updateObj.xray_last_config = xray_last_config;
             updateObj.xray_real_subscription_url = xray_real_subscription_url;
-            updateObj.xray_subscription_url = xray_subscription_url;
+            updateObj.xray_subscription_url = await build_xray_subscription_url({ username, expire: does_exist.expire, maximum_connections: does_exist.maximum_connections || 1 });
             updateObj.xray_enabled = true;
         }
         await User.updateOne({username}, updateObj);
@@ -466,9 +484,8 @@ PersistentKeepalive = 25
         await User.create(createObj);
     }
             
-    await sync_configs();
-    await ensure_listen_port(amnezia_port);
-    if(xray_available) await sync_xray_from_db();
+    if(xray_available) await sync_xray_single_user(username);
+    await sync_awg_single_user(username);
 
     return {
         links: [connection_string],
@@ -562,24 +579,62 @@ const reset_user_account = async (username) =>
 {
     const user_obj = await User.findOne({username});
     await User.updateOne({username}, {used_traffic: 0, lifetime_used_traffic: user_obj.lifetime_used_traffic + user_obj.used_traffic});
-    if(await isXrayAvailable()) await sync_xray_from_db();
+    if(await isXrayAvailable()) await sync_xray_single_user(username);
     return true;
 }
 
 const edit_user = async (username, status, expire, data_limit) =>
 {
+    // اگر صراحتاً status فرستاده شده (مثلاً از API پنل)، همون رو اعمال کن
     if(status) 
     {
-        await User.updateOne({username}, {status});
-        if(await isXrayAvailable()) await sync_xray_from_db();
+        await User.updateOne({ username }, { status });
+        if(await isXrayAvailable()) await sync_xray_single_user(username);
+        await sync_awg_single_user(username);
         return true;
     }
 
-    const user_obj = await User.findOne({username});
+    const user_obj = await User.findOne({ username });
+    if(!user_obj) throw new Error("User not found");
 
+    // --- منطق جدید برای تعیین status براساس expire جدید ---
+    const now = get_now();
+    let newStatus = user_obj.status;
+
+    // فقط اگر expire جدید معتبر باشه
+    if(typeof expire === "number" && expire > 0)
+    {
+        if(expire > now)
+        {
+            // اگر قبلاً expired یا limited بوده و الان تمدید شده، فعالش کن
+            if(user_obj.status === "expired" || user_obj.status === "limited")
+            {
+                newStatus = "active";
+            }
+        }
+        else
+        {
+            // اگر expire جدید در گذشته است، حتماً expired بشه
+            newStatus = "expired";
+        }
+    }
+
+    // اگر روزهای باقی‌مانده تغییر کرده (یعنی تمدید واقعی)
     if(get_days_left(user_obj.expire) != get_days_left(expire))
     {
-        await User.updateOne({username}, {expire, data_limit, used_traffic: 0, lifetime_used_traffic: user_obj.lifetime_used_traffic + user_obj.used_traffic});
+        // expire + دیتالیمیت + ریست ترافیک + به‌روز کردن lifetime + status جدید
+        await User.updateOne(
+            { username },
+            {
+                expire,
+                data_limit,
+                used_traffic: 0,
+                lifetime_used_traffic: user_obj.lifetime_used_traffic + user_obj.used_traffic,
+                status: newStatus,
+            }
+        );
+
+        // اگر xray هست، کانفیگ جدید براش بساز
         if(await isXrayAvailable())
         {
             const xinfo = await get_xray_static_info();
@@ -589,26 +644,52 @@ const edit_user = async (username, status, expire, data_limit) =>
                 const cfg = build_xray_client_config_from(newUuid, xinfo);
                 const tempUser = { xray_last_config: cfg };
                 const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
-                const xrayApiRaw = {
-                    config_version: 1,
-                    api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
-                    protocol: "xray",
-                    name: process.env.COUNTRY_EMOJI + " " + username,
-                    description: generate_desc(expire, user_obj.maximum_connections || 1),
-                    api_key: jwt.sign({ username: username, proto: "xray" }, SUB_JWT_SECRET),
-                };
-                const xrayApiLink = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
-                await User.updateOne({ username }, { xray_uuid: newUuid, xray_last_config: cfg, xray_real_subscription_url: xraySubReal, xray_subscription_url: xrayApiLink });
+                const xrayApiLink = await build_xray_subscription_url({
+                    username,
+                    expire,
+                    maximum_connections: user_obj.maximum_connections || 1
+                });
+                await User.updateOne(
+                    { username },
+                    {
+                        xray_uuid: newUuid,
+                        xray_last_config: cfg,
+                        xray_real_subscription_url: xraySubReal,
+                        xray_subscription_url: xrayApiLink,
+                    }
+                );
             }
-            await sync_xray_from_db();
+            await sync_xray_single_user(username);
         }
+
+        // لینک AWG جدید بر اساس expire جدید
+        const awgSub = await build_awg_subscription_url({
+            username,
+            expire,
+            maximum_connections: user_obj.maximum_connections || 1
+        });
+        await User.updateOne({ username }, { subscription_url: awgSub });
+
+        // sync با AWG (با status جدید)
+        await sync_awg_single_user(username);
         return true;
     }
     
-    await User.updateOne({username}, {data_limit, expire});
-    if(await isXrayAvailable()) await sync_xray_from_db();
+    // اگر روزها عوض نشده ولی expire یا data_limit عوض شده
+    await User.updateOne(
+        { username },
+        {
+            data_limit,
+            expire,
+            status: newStatus,
+        }
+    );
+
+    if(await isXrayAvailable()) await sync_xray_single_user(username);
+    await sync_awg_single_user(username);
     return true;
 }
+
 
 const delete_user = async (username) =>
 {
@@ -636,10 +717,10 @@ const delete_user = async (username) =>
 
     await replace_amnezia_clients_table(JSON.stringify(clients_table,null,4));
 
-    await sync_configs();
+    await sync_awg_single_user(username);
 
     await User.deleteOne({ username });
-    if(await isXrayAvailable()) await sync_xray_from_db();
+    if(await isXrayAvailable()) await sync_xray_single_user(username);
     return true;
 }
 
@@ -724,22 +805,7 @@ const replace_wg0_interface = async (new_config) =>
 
 const ensure_listen_port = async (expectedPort) =>
 {
-    var interface = await get_wg0_interface();
-    var lines = interface.split('\n');
-    for(let i=0;i<lines.length;i++)
-    {
-        if(lines[i].startsWith('ListenPort = '))
-        {
-            var current = lines[i].split(' = ')[1];
-            if(current !== expectedPort)
-            {
-                lines[i] = `ListenPort = ${expectedPort}`;
-                await replace_wg0_interface(lines.join('\n'));
-                await sync_configs();
-            }
-            break;
-        }
-    }
+    return true;
 }
 
 const replace_amnezia_clients_table = async (new_table) =>
@@ -783,6 +849,19 @@ const set_xray_server_config = async (configObj) =>
     await exec(`docker cp ./temp${file_id} ${container_id}:/opt/amnezia/xray/server.json`);
     await fs.unlink(`./temp${file_id}`);
     await exec("docker restart amnezia-xray");
+    return true;
+}
+
+const set_xray_server_config_soft = async (configObj) =>
+{
+    var container_id = await get_xray_container_id();
+    if(!container_id) { console.log("Xray container not found"); return false; }
+    var file_id = uid();
+    var data = JSON.stringify(configObj, null, 4);
+    await fs.writeFile(`./temp${file_id}`,data);
+    await exec(`docker cp ./temp${file_id} ${container_id}:/opt/amnezia/xray/server.json`);
+    await fs.unlink(`./temp${file_id}`);
+    try { await exec_on_container_sh(container_id, 'pkill -HUP xray || kill -HUP $(pidof xray) || true'); } catch(e) {}
     return true;
 }
 
@@ -952,6 +1031,195 @@ const sync_xray_from_db = async () =>
     return true;
 }
 
+const sync_xray_single_user = async (username) =>
+{
+    if(!(await isXrayAvailable())) { console.log("Xray not found → skip sync_xray_single_user()" ); return false; }
+    const now = get_now();
+    const xinfo = await get_xray_static_info();
+    const sconf = await get_xray_server_config();
+    if(!xinfo || !sconf) return false;
+    const u = await User.findOne({ username }).lean();
+    if(!u) return false;
+    const okExpire = (u.expire || 0) > now;
+    const okData = (u.data_limit || 0) === 0 || (u.used_traffic || 0) < (u.data_limit || 0);
+    let uidv = u.xray_uuid && u.xray_uuid.length > 0 ? u.xray_uuid : (crypto.randomUUID ? crypto.randomUUID() : uuidv4());
+    if(!u.xray_uuid || u.xray_uuid.length === 0)
+    {
+        await User.updateOne({ username }, { xray_uuid: uidv });
+    }
+    const cfg = build_xray_client_config_from(uidv, xinfo);
+    const tempUser = { xray_last_config: cfg };
+    const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
+    const xrayApiRaw = {
+        config_version: 1,
+        api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
+        protocol: "xray",
+        name: process.env.COUNTRY_EMOJI + " " + username,
+        description: generate_desc(u.expire, u.maximum_connections || 1),
+        api_key: jwt.sign({ username: username, proto: "xray" }, SUB_JWT_SECRET),
+    };
+    const xrayApiLink = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
+    await User.updateOne({ username }, { xray_last_config: cfg, xray_real_subscription_url: xraySubReal, xray_subscription_url: xrayApiLink });
+
+    const oldClients = (sconf.inbounds && sconf.inbounds[0] && sconf.inbounds[0].settings && sconf.inbounds[0].settings.clients) ? sconf.inbounds[0].settings.clients : [];
+    let changed = false;
+    for (let i = oldClients.length - 1; i >= 0; i--) {
+        if (oldClients[i].id === u.xray_uuid || oldClients[i].id === uidv) {
+            oldClients.splice(i, 1);
+            changed = true;
+        }
+    }
+    if (okExpire && okData) {
+        oldClients.push(build_xray_client_obj({ xray_uuid: uidv }));
+        changed = true;
+    }
+    if(changed)
+    {
+        sconf.inbounds[0].settings.clients = oldClients;
+        await set_xray_server_config(sconf);
+        await User.updateOne({ username }, { xray_enabled: okExpire && okData });
+    }
+    else
+    {
+        await User.updateOne({ username }, { xray_enabled: okExpire && okData });
+    }
+    return true;
+}
+
+const sync_awg_single_user = async (username) =>
+{
+    const user = await User.findOne({ username }).lean();
+    if(!user) return false;
+
+    const now = get_now();
+    const shouldEnable = user.status === "active" && (user.expire || 0) > now && ((user.data_limit || 0) === 0 || (user.used_traffic || 0) < (user.data_limit || 0));
+
+    let interfaceStr = await get_wg0_interface();
+    let lines = interfaceStr.split("\n");
+    const clientsTable = await get_amnezia_clients_table();
+
+    const ctEntry = clientsTable.find(it => it.userData && it.userData.clientName === username);
+    const ctKey = ctEntry ? ctEntry.clientId : "";
+
+    const pubKey = user.public_key;
+    const findPeerIndexByKey = (key) => lines.findIndex(l => l.includes("PublicKey = ") && l.includes(key));
+    let peerKeyIndex = findPeerIndexByKey(pubKey);
+    if(peerKeyIndex === -1 && ctKey) peerKeyIndex = findPeerIndexByKey(ctKey);
+
+    let dedicatedIp = "";
+    try {
+        const m = (user.connection_string || "").split("\n").find(l=>l.trim().startsWith("Address = "));
+        dedicatedIp = m ? m.split(" = ")[1].trim() : "";
+    } catch(e) {}
+
+    let psk = "";
+    if(peerKeyIndex !== -1)
+    {
+        const pskLine = lines[peerKeyIndex+1] || "";
+        if(pskLine.trim().startsWith("PresharedKey = ")) psk = pskLine.split(" = ")[1].trim();
+    }
+    if(!psk)
+    {
+        const docker_id = await get_amnezia_container_id();
+        try { psk = (await exec_on_container(docker_id, "wg genpsk")).trim(); } catch(e) {}
+    }
+
+    let changedInterface = false;
+
+    if(peerKeyIndex === -1)
+    {
+        const base = interfaceStr.endsWith('\n') ? interfaceStr : interfaceStr + '\n';
+        const block = [
+            "[Peer]",
+            `PublicKey = ${pubKey}`,
+            `PresharedKey = ${psk}`,
+            `AllowedIPs = ${dedicatedIp}`,
+            ""
+        ].join("\n");
+        interfaceStr = `${base}${block}`;
+        changedInterface = true;
+        lines = interfaceStr.split("\n");
+        peerKeyIndex = findPeerIndexByKey(pubKey);
+    }
+    else
+    {
+        const currentKey = lines[peerKeyIndex].split(" = ")[1].trim();
+        if(currentKey !== pubKey)
+        {
+            lines[peerKeyIndex] = `PublicKey = ${pubKey}`;
+            changedInterface = true;
+        }
+        const allowedIndex = peerKeyIndex + 2;
+        if(lines[allowedIndex] && lines[allowedIndex].trim().startsWith("AllowedIPs = "))
+        {
+            const cur = lines[allowedIndex].split(" = ")[1].trim();
+            if(cur !== dedicatedIp)
+            {
+                lines[allowedIndex] = `AllowedIPs = ${dedicatedIp}`;
+                changedInterface = true;
+            }
+        }
+    }
+
+    if(peerKeyIndex !== -1)
+    {
+        const peerStart = peerKeyIndex - 1;
+        if(peerStart > 3 && lines[peerStart].includes("[Peer]"))
+        {
+            const isCommented = (i) => lines[i].startsWith("#");
+            const commentLine = (i) => { if(!isCommented(i)) { lines[i] = "#"+lines[i]; changedInterface = true; } };
+            const uncommentLine = (i) => { if(isCommented(i)) { lines[i] = lines[i].replace(/^#/,""); changedInterface = true; } };
+            if(!shouldEnable)
+            {
+                commentLine(peerStart);
+                commentLine(peerKeyIndex);
+                commentLine(peerKeyIndex+1);
+                commentLine(peerKeyIndex+2);
+            }
+            else
+            {
+                uncommentLine(peerStart);
+                uncommentLine(peerKeyIndex);
+                uncommentLine(peerKeyIndex+1);
+                uncommentLine(peerKeyIndex+2);
+            }
+        }
+    }
+
+    if(changedInterface)
+    {
+        await replace_wg0_interface(lines.join("\n"));
+        await sync_configs();
+    }
+
+    let changedCT = false;
+    if(ctEntry)
+    {
+        if(ctEntry.clientId !== pubKey)
+        {
+            ctEntry.clientId = pubKey;
+            changedCT = true;
+        }
+    }
+    else
+    {
+        let creation_date = new Date((user.expire || get_now()) * 1000).toString().split(" GMT")[0];
+        creation_date = creation_date.split(" ");
+        const temp = creation_date[creation_date.length - 1];
+        creation_date[creation_date.length - 1] = creation_date[creation_date.length - 2];
+        creation_date[creation_date.length - 2] = temp;
+        creation_date = creation_date.join(" ");
+        clientsTable.push({ clientId: pubKey, userData: { clientName: username, creationDate: creation_date } });
+        changedCT = true;
+    }
+    if(changedCT)
+    {
+        await replace_amnezia_clients_table(JSON.stringify(clientsTable, null, 4));
+    }
+
+    return true;
+}
+
 const get_real_subscription_url = async (api_key, installation_uuid) =>
 {
     const decoded = jwt.verify(api_key, SUB_JWT_SECRET);
@@ -1039,6 +1307,31 @@ const encode_amnezia_data = async (data) =>
     var result = await exec("python3 decoder.py -i ./temp"+temp_file_id+".json");
     await fs.unlink(`./temp${temp_file_id}.json`);
     return result;
+}
+const build_awg_subscription_url = async (user) =>
+{
+    const raw = {
+        config_version:1,
+        api_endpoint:`https://${process.env.ENDPOINT_ADDRESS}/sub`,
+        protocol:"awg",
+        name:process.env.COUNTRY_EMOJI + " " + user.username,
+        description:generate_desc(user.expire, user.maximum_connections || 1),
+        api_key:jwt.sign({username:user.username},SUB_JWT_SECRET),
+    };
+    return await encode_amnezia_data(JSON.stringify(raw));
+}
+
+const build_xray_subscription_url = async (user) =>
+{
+    const raw = {
+        config_version: 1,
+        api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
+        protocol: "xray",
+        name: process.env.COUNTRY_EMOJI + " " + user.username,
+        description: generate_desc(user.expire, user.maximum_connections || 1),
+        api_key: jwt.sign({ username: user.username, proto: "xray" }, SUB_JWT_SECRET),
+    };
+    return await encode_amnezia_data(JSON.stringify(raw));
 }
 
 const build_awg_subscription_raw = (cfg) =>
@@ -1241,10 +1534,12 @@ const backup_data = async () =>
 
 const $sync_accounting = async () =>
 {
-    var users = await User.find();
+    var users = await User.find({ status: "active" });
     var interface = await get_wg0_interface();
     var interface_lines = interface.split("\n");
     var clients_table = await get_amnezia_clients_table();
+
+    const transferMap = await get_wg_transfers_map();
 
     // اول مطمئن شویم که دو خط اول [Interface] فعال هستند
     if(interface_lines[0].startsWith("#")) {
@@ -1262,15 +1557,22 @@ const $sync_accounting = async () =>
 
         if(!client_table_names.includes(user.username))
         {
-            await Log.create({msg: `User ${user.username} not found in clients table, deleting user`});
-            console.log(`User ${user.username} not found in clients table, deleting user`);
-            await User.deleteOne({username: user.username});
+            if(!user.xray_enabled)
+            {
+                await Log.create({msg: `User ${user.username} not found in clients table, deleting user`});
+                console.log(`User ${user.username} not found in clients table, deleting user`);
+                await User.deleteOne({username: user.username});
+            }
+            else
+            {
+                // skip
+            }
             continue;
         }
 
         const client_table_user_obj = clients_table.find((item) => item.userData.clientName == user.username);
 
-        const used_traffic = await get_user_traffic_from_wg_cli(user.public_key);
+        const used_traffic = transferMap.get(user.public_key) ?? false;
 
         if(used_traffic != false && used_traffic != user.last_captured_traffic)
         {
@@ -1467,17 +1769,22 @@ module.exports =
     isXrayAvailable,
     get_xray_server_config,
     set_xray_server_config,
+    set_xray_server_config_soft,
     set_xray_port,
     build_xray_client_obj,
     get_xray_static_info,
     build_xray_client_config_from,
     sync_xray_from_db,
+    sync_xray_single_user,
     exec_on_container,
     build_xray_subscription_url_from,
     encode_amnezia_data,
+    build_awg_subscription_url,
+    build_xray_subscription_url,
     build_awg_subscription_raw,
     buildAwgConfigForUser,
     
     $sync_accounting,
     User,
+    sync_awg_single_user,
 }

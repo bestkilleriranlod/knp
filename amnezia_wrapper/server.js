@@ -18,6 +18,7 @@ const {
     delete_user,
     get_real_subscription_url,
     unlock_user_account,
+    sync_xray_single_user,
 } = require('./utils.js');
 const path = require("path");
 
@@ -194,6 +195,12 @@ app1.put("/api/user/:vpn_name", custom_handler(async (req, res) =>
 app1.post("/api/user/:vpn_name/reset", custom_handler(async (req, res) =>
 {
     await reset_user_account(req.params.vpn_name);
+    res.send("OK");
+}));
+
+app1.post("/api/xray/sync/:vpn_name", custom_handler(async (req, res) =>
+{
+    await sync_xray_single_user(req.params.vpn_name);
     res.send("OK");
 }));
 
