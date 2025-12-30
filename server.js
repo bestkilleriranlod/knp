@@ -1157,16 +1157,6 @@ app.post("/unlock_user", async (req, res) => {
         var result = await unlock_marzban_user(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
         if (result == "ERR") {res.send({ status: "ERR", msg: "failed to connect to marzban" });return;}
 
-        // Sync user data back from agent to ensure Xray link is updated
-        var updated_user_info = await get_marzban_user(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
-        if (updated_user_info != "ERR") {
-            await update_user(user_id, {
-                xray_subscription_url: updated_user_info.xray_subscription_url || "",
-                xray_real_subscription_url: updated_user_info.xray_real_subscription_url || "",
-                xray_enabled: !!updated_user_info.xray_subscription_url
-            });
-        }
-
         var account = await token_to_account(access_token);
         
         // Add panel type and user status details to the log
