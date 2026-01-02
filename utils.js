@@ -671,7 +671,8 @@ const update_user_links_bg = (panel_url,panel_username,panel_password,username,i
             update_user(id,
                         {
                             "real_subscription_url": (complete_user_info.subscription_url.startsWith("/")?panel_url:"")+complete_user_info.subscription_url,
-                            "links": complete_user_info.links
+                            "links": complete_user_info.links,
+                            "xray_subscription_url": complete_user_info.xray_subscription_url || ""
                         });
                         
             //console.log("updated links of user " + username);
