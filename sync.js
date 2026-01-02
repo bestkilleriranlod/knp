@@ -146,6 +146,15 @@ async function main()
                             await syslog("updated subscription url for user !" + user.username + " in panel !" + panel.panel_url,1);
                         }
                     }
+
+                    if (marzban_user.xray_subscription_url)
+                    {
+                        if(user.xray_subscription_url != marzban_user.xray_subscription_url) 
+                        {
+                            await update_user(user.id, { xray_subscription_url: marzban_user.xray_subscription_url });
+                            await syslog("updated xray subscription url for user !" + user.username + " in panel !" + panel.panel_url,1);
+                        }
+                    }
                     if (user.used_traffic != marzban_user.used_traffic) 
                     {
                         
