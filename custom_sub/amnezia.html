@@ -465,6 +465,18 @@
     </div>
 
 <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var xrayInput = document.getElementById("xray-copy-text");
+            if(xrayInput) {
+                var val = xrayInput.value.trim();
+                // If value is empty or contains the template placeholder, hide the section
+                if(!val || val.indexOf("{{xray_subscription_url}}") !== -1) {
+                    var card = xrayInput.closest(".card");
+                    if(card) card.style.display = "none";
+                }
+            }
+        });
+
         // Set QR code source
         document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${window.location.href}`;
 
