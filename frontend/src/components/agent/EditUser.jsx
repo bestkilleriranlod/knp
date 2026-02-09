@@ -86,7 +86,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                     if (days > 75) closestDays = 90;
                     
                     // محاسبه هزینه براساس AMNEZIA_COEFFICIENT و رند کردن به بالا
-                    const AMNEZIA_COEFFICIENT = 2.3333; // مقدار یکسان با سرور
+                    const AMNEZIA_COEFFICIENT = 6.6666; // مقدار یکسان با سرور
                     const calculateCost = (days) => {
                         const exactCost = days * AMNEZIA_COEFFICIENT;
                         return Math.ceil(exactCost); // رند به بالا
@@ -277,7 +277,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
         { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item.username) },
         // فقط دکمه Unlock Account برای اکانت‌های Amnezia نمایش داده شود
         ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item.id) }] : []),
-        { icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item.id, item.status) },
+        ...(item && item.status !== 'expired' ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item.id, item.status) }] : []),
     ]
 
     const b2gb = (bytes) => {
