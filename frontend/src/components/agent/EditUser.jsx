@@ -72,8 +72,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             }
 
             // تشخیص نوع پنل از روی شناسه پنل یا کشور
-            console.log("Panel ID:", item.corresponding_panel_id)
-            console.log("Panel Type:", panel_type)
+            // console.log("Panel ID:", item.corresponding_panel_id)
+            // console.log("Panel Type:", panel_type)
             
             if (panel_type === "AMN") {
                 setExpireInputType("plan_selection")
@@ -285,26 +285,25 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const isUserExpired = () => {
         if (!item) return false;
         
-        console.log("Checking user expiry for:", item.username);
-        console.log("Status:", item.status);
-        console.log("Expire timestamp:", item.expire);
-        
         // بررسی وضعیت متنی
         if (item.status === 'expired' || item.status === 'Expired') {
-            console.log("User is expired by status string");
             return true;
         }
         
         // بررسی زمان انقضا
         if (item.expire) {
             const days = timeStampToDay(item.expire);
-            console.log("Days remaining:", days);
             if (days <= 0) {
-                console.log("User is expired by date");
                 return true;
             }
         }
         
+        // بررسی وضعیت Inactive (زمانی که کاربر منقضی شده ولی وضعیت هنوز سینک نشده یا غیرفعال است)
+        // اگر وضعیت غیرفعال باشد ولی توسط ادمین دستی غیرفعال نشده باشد، فرض بر انقضا است
+        if ((item.status === 'inactive' || item.status === 'Inactive') && !item.disable) {
+             return true;
+        }
+
         return false;
     }
     
