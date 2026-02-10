@@ -271,14 +271,6 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     }
     
     const panel_type = getPanelType()
-    
-
-    const secondaryButtons = [
-        { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item.username) },
-        // فقط دکمه Unlock Account برای اکانت‌های Amnezia نمایش داده شود
-        ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item.id) }] : []),
-        ...(item && item.status !== 'expired' ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item.id, item.status) }] : []),
-    ]
 
     const b2gb = (bytes) => {
         return (bytes / (2 ** 10) ** 3).toFixed(2)
@@ -288,6 +280,29 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
         const time = timeStamp - Math.floor(Date.now() / 1000)
         return Math.floor(time / 86400) + 1
     }
+
+    // محاسبه وضعیت انقضا برای نمایش دکمه‌ها
+    const isUserExpired = () => {
+        if (!item) return false;
+        
+        // بررسی وضعیت متنی
+        if (item.status === 'expired' || item.status === 'Expired') return true;
+        
+        // بررسی زمان انقضا
+        if (item.expire) {
+            const days = timeStampToDay(item.expire);
+            if (days <= 0) return true;
+        }
+        
+        return false;
+    }
+    
+    const secondaryButtons = [
+        { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item.username) },
+        // فقط دکمه Unlock Account برای اکانت‌های Amnezia نمایش داده شود
+        ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item.id) }] : []),
+        ...(item && !isUserExpired() ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item.id, item.status) }] : []),
+    ]
 
     const handle_safu_change = (e) => {
         setSafu(e.target.checked)
