@@ -55,12 +55,10 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled, isEd
         // دریافت پنل‌ها برای بررسی ظرفیت
         const panelsResponse = await axios.post("/get_panels", { access_token })
         const panels = Array.isArray(panelsResponse.data) ? panelsResponse.data : []
-        console.log('Panels data received:', panels)
         
         // دریافت کاربران برای بررسی تعداد کاربران هر کشور
         const usersResponse = await axios.post("/get_users", { access_token })
         const users = usersResponse.data && usersResponse.data.obj_arr ? usersResponse.data.obj_arr : []
-        console.log('Users data received:', users)
         
         // محاسبه تعداد کاربران هر کشور
         const countryUsersCount = {}
@@ -87,9 +85,9 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled, isEd
               // محاسبه تعداد ظرفیت باقی‌مانده
               if (!isFull) {
                 spotsLeft = panel.panel_user_max_count - panel.total_users
-                console.log(`Panel ${country}: total_users=${panel.total_users}, max=${panel.panel_user_max_count}, spotsLeft=${spotsLeft}`)
+                // console.log(`Panel ${country}: total_users=${panel.total_users}, max=${panel.panel_user_max_count}, spotsLeft=${spotsLeft}`)
               } else {
-                console.log(`Panel ${country}: total_users=${panel.total_users}, max=${panel.panel_user_max_count}, isFull=${isFull}`)
+                // console.log(`Panel ${country}: total_users=${panel.total_users}, max=${panel.panel_user_max_count}, isFull=${isFull}`)
               }
             }
             
@@ -97,7 +95,7 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled, isEd
             if (panel.disable === true) {
               isFull = true
               spotsLeft = null
-              console.log(`Panel ${country}: disabled, marking as full`)
+              // console.log(`Panel ${country}: disabled, marking as full`)
             }
             
             // بررسی اتمام ترافیک پنل
@@ -105,7 +103,7 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled, isEd
                 panel.panel_traffic <= panel.panel_data_usage) {
               isFull = true
               spotsLeft = null
-              console.log(`Panel ${country}: out of traffic, marking as full`)
+              // console.log(`Panel ${country}: out of traffic, marking as full`)
             }
           }
           
@@ -116,7 +114,7 @@ export default function BasicSelect({ onChange, defaultValue, id, disabled, isEd
           }
         })
         
-        console.log('Final countries status:', countriesWithStatus)
+        // console.log('Final countries status:', countriesWithStatus)
         setCountries(countriesWithStatus)
       } catch (error) {
         console.error("Error fetching countries data:", error)
