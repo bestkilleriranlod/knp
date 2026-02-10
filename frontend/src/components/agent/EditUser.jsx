@@ -285,13 +285,24 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const isUserExpired = () => {
         if (!item) return false;
         
+        console.log("Checking user expiry for:", item.username);
+        console.log("Status:", item.status);
+        console.log("Expire timestamp:", item.expire);
+        
         // بررسی وضعیت متنی
-        if (item.status === 'expired' || item.status === 'Expired') return true;
+        if (item.status === 'expired' || item.status === 'Expired') {
+            console.log("User is expired by status string");
+            return true;
+        }
         
         // بررسی زمان انقضا
         if (item.expire) {
             const days = timeStampToDay(item.expire);
-            if (days <= 0) return true;
+            console.log("Days remaining:", days);
+            if (days <= 0) {
+                console.log("User is expired by date");
+                return true;
+            }
         }
         
         return false;
