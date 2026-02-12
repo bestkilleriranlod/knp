@@ -283,7 +283,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
 
     // محاسبه وضعیت انقضا برای نمایش دکمه‌ها
     const isUserExpired = () => {
-        if (!item) return false;
+        if (!item) return true; // اگر کاربر وجود نداشته باشد، دکمه نمایش داده نشود
         
         // بررسی وضعیت متنی (شامل منقضی شده و محدود شده)
         if (item.status === 'expired' || item.status === 'Expired' || item.status === 'limited' || item.status === 'Limited') {
@@ -308,10 +308,11 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     }
     
     const secondaryButtons = [
-        { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item.username) },
+        { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item?.username) },
         // فقط دکمه Unlock Account برای اکانت‌های Amnezia نمایش داده شود
-        ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item.id) }] : []),
-        ...(item && !isUserExpired() ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item.id, item.status) }] : []),
+        ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item?.id) }] : []),
+        // نمایش دکمه Power فقط در صورتی که کاربر منقضی یا محدود نشده باشد
+        ...(!isUserExpired() ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item?.id, item?.status) }] : []),
     ]
 
     const handle_safu_change = (e) => {
