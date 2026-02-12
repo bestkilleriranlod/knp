@@ -285,20 +285,30 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const isUserExpired = () => {
         if (!item) return true; // اگر کاربر وجود نداشته باشد، دکمه نمایش داده نشود
         
-        // بررسی وضعیت متنی (شامل منقضی شده و محدود شده)
+        // ۱. بررسی وضعیت متنی (شامل منقضی شده و محدود شده)
         if (item.status === 'expired' || item.status === 'Expired' || item.status === 'limited' || item.status === 'Limited') {
             return true;
         }
         
-        // بررسی زمان انقضا
+        // ۲. بررسی زمان انقضا
         if (item.expire) {
             const days = timeStampToDay(item.expire);
             if (days <= 0) {
                 return true;
             }
         }
+
+        // ۳. بررسی محدودیت حجمی (Data Limit)
+        // اگر حجم مصرف شده بیشتر یا مساوی حجم کل باشد، کاربر محدود شده است
+        if (item.data_limit && item.data_limit > 0) {
+            const used = parseFloat(item.used_traffic || 0);
+            const limit = parseFloat(item.data_limit);
+            if (used >= limit) {
+                return true;
+            }
+        }
         
-        // بررسی وضعیت Inactive (زمانی که کاربر منقضی شده ولی وضعیت هنوز سینک نشده یا غیرفعال است)
+        // ۴. بررسی وضعیت Inactive (زمانی که کاربر منقضی شده ولی وضعیت هنوز سینک نشده یا غیرفعال است)
         // اگر وضعیت غیرفعال باشد ولی توسط ادمین دستی غیرفعال نشده باشد، فرض بر انقضا است
         if ((item.status === 'inactive' || item.status === 'Inactive') && !item.disable) {
              return true;
