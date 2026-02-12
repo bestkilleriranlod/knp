@@ -285,8 +285,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const isUserExpired = () => {
         if (!item) return false;
         
-        // بررسی وضعیت متنی
-        if (item.status === 'expired' || item.status === 'Expired') {
+        // بررسی وضعیت متنی (شامل منقضی شده و محدود شده)
+        if (item.status === 'expired' || item.status === 'Expired' || item.status === 'limited' || item.status === 'Limited') {
             return true;
         }
         
