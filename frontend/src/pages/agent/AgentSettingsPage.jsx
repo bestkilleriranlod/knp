@@ -22,6 +22,7 @@ const AdminSettingsPage = () => {
     const [ok_msg, setOk_msg] = useState("Credentials changed")
     const [hasOk, setHasOk] = useState(false)
     const [saveMode, setSaveMode] = useState(false)
+    const [saveSupportUrlMode, setSaveSupportUrlMode] = useState(false)
     const [createMode, setCreateMode] = useState(false)
     const [deleteMode, setDeleteMode] = useState(false)
     const [editMode, setEditMode] = useState(false)
@@ -38,6 +39,8 @@ const AdminSettingsPage = () => {
     }, [showEditModal])
 
     const access_token = sessionStorage.getItem("access_token")
+    const [supportUrl, setSupportUrl] = useState("")
+    const [agent, setAgent] = useState(JSON.parse(sessionStorage.getItem("agent") || "{}"))
 
     const changeCrendtials = async (e) => {
         e.preventDefault()
@@ -76,6 +79,40 @@ const AdminSettingsPage = () => {
             setSaveMode(false)
         }
         setSaveMode(false)
+    }
+
+    useEffect(() => {
+        const fetchAgent = async () => {
+            try {
+                const access_token = sessionStorage.getItem("access_token")
+                const res = await axios.post("/get_agent", { access_token })
+                if (res.data && res.data.id) {
+                    sessionStorage.setItem("agent", JSON.stringify(res.data))
+                    setAgent(res.data)
+                    setSupportUrl(res.data.support_url || "")
+                }
+            } catch (e) {}
+        }
+        fetchAgent()
+    }, [])
+
+    const saveSupportUrl = async (e) => {
+        e.preventDefault()
+        setSaveSupportUrlMode(true)
+        try {
+            const res = await axios.post("/set_support_url", { access_token, support_url: supportUrl })
+            if (res.data.status === "ERR") {
+                setError_msg(res.data.msg || "BAD REQUEST")
+                setHasError(true)
+            } else {
+                setOk_msg("Support URL saved")
+                setHasOk(true)
+            }
+        } catch (err) {
+            setError_msg("Failed to save support URL")
+            setHasError(true)
+        }
+        setSaveSupportUrlMode(false)
     }
 
     const createAdmin = (e) => {
@@ -194,6 +231,19 @@ const AdminSettingsPage = () => {
                     </div>
                     <footer className="settings-page__footer flex justify-end">
                         <Button onClick={(e) => changeCrendtials(e)} className="primary" disabled={saveMode}>{saveMode ? "Saving..." : "Save"}</Button>
+                    </footer>
+                </form>
+            </section>
+
+            <section className={`${styles['change-credentials-section']}`} style={{ marginBottom: "1rem" }}>
+                <h2 style={{ marginBottom: "1rem" }}>Support Link</h2>
+                <form autoComplete='off' className="settings-page flex flex-col gap-2.5" style={{ padding: "0 1rem" }}>
+                    <div className="modal__form__group">
+                        <label className="modal__form__label" htmlFor="support_url">Support URL</label>
+                        <input className="modal__form__input" type="text" id="support_url" name="support_url" value={supportUrl} onChange={(e) => setSupportUrl(e.target.value)} placeholder="https://t.me/your_channel" />
+                    </div>
+                    <footer className="settings-page__footer flex justify-end">
+                        <Button onClick={(e) => saveSupportUrl(e)} className="primary" disabled={saveSupportUrlMode}>{saveSupportUrlMode ? "Saving..." : "Save"}</Button>
                     </footer>
                 </form>
             </section>
