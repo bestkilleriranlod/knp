@@ -21,10 +21,11 @@ const CreatePanel = ({ onClose, showForm }) => {
         panel_password,
         panel_country,
         panel_user_max_count,
-        panel_traffic
+        panel_traffic,
+        default_ip_limit
     ) => {
         setCreateMode(true)
-        const res = await axios.post("/create_panel", { panel_name, panel_url, panel_username, panel_password, panel_country, panel_user_max_count, panel_traffic, access_token })
+        const res = await axios.post("/create_panel", { panel_name, panel_url, panel_username, panel_password, panel_country, panel_user_max_count, panel_traffic, default_ip_limit, access_token })
 
         if (res.data.status === "ERR") {
             setError_msg(res.data.msg || "Failed to create panel (BAD REQUEST)")
@@ -46,8 +47,9 @@ const CreatePanel = ({ onClose, showForm }) => {
         const panel_country = document.getElementById("country").value
         const panel_user_max_count = document.getElementById("panel_user_max_count").value
         const panel_traffic = document.getElementById("panel_traffic").value
+        const default_ip_limit = document.getElementById("default_ip_limit").value
         // Send form data to backend
-        createPanelOnServer(panel_name, panel_url, panel_username, panel_password, panel_country, panel_user_max_count, panel_traffic)
+        createPanelOnServer(panel_name, panel_url, panel_username, panel_password, panel_country, panel_user_max_count, panel_traffic, default_ip_limit)
     }
 
     const formFields = [
@@ -58,6 +60,7 @@ const CreatePanel = ({ onClose, showForm }) => {
         { label: "Capacity", type: "number", id: "panel_user_max_count", name: "capacity" },
         { label: "Traffic", type: "number", id: "panel_traffic", name: "traffic" },
         { label: "Country", type: "text", id: "country", name: "country" },
+        { label: "Default IP Limit", type: "number", id: "default_ip_limit", name: "default_ip_limit" },
     ]
 
     const primaryButtons = [
