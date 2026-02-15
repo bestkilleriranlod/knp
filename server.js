@@ -149,15 +149,33 @@ app.post("/get_users", async (req, res) => {
         var panels = await get_panels();
         obj_arr = obj_arr.filter(x => panels.filter(y => y.id == x.corresponding_panel_id)[0].panel_type == panel_type);
     }
+
+    for(let i=0;i<obj_arr.length;i++)
+    {
+        const u = obj_arr[i];
+        if(!u.subscription_url_crypto && u.subscription_url && typeof u.subscription_url === "string" && u.subscription_url.includes("/sub/"))
+        {
+            try 
+            {
+                const crypto = await generate_happ_crypto_link(u.subscription_url);
+                if(crypto)
+                {
+                    await update_user(u.id,{subscription_url_crypto: crypto});
+                    u.subscription_url_crypto = crypto;
+                }
+            }
+            catch(e){}
+        }
+    }
     
     if(!number_of_rows && !current_page) {current_page = 1;number_of_rows = 10;}
     var total_pages = Math.ceil(obj_arr.length / number_of_rows);
-    obj_arr = obj_arr.slice((current_page - 1) * number_of_rows, current_page * number_of_rows);
+    obj_arr = obj_arr.slice((current_page - 1) * number_of_rows, number_of_rows * current_page);
 
     obj_arr = obj_arr.map(v=>
     {
-        // if(v.links.length == 1 && v.links[0].includes("[Interface]")) 
-        v.links[0] = v.subscription_url
+        if(v.subscription_url_crypto) v.subscription_url = v.subscription_url_crypto;
+        v.links[0] = v.subscription_url;
         return v;
     });
 
