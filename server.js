@@ -2,8 +2,9 @@ require('dotenv').config()
 const express = require('express'); const app = express();
 const fileUpload = require('express-fileupload');
 const fs = require('fs');
+const axios = require('axios');
 var AdmZip = require("adm-zip");
-var { accounts_clct, panels_clct, users_clct, logs_clct } = require('./db_interface');
+var { accounts_clct, panels_clct, users_clct, logs_clct, redis_client } = require('./db_interface');
 const amnezia_sub_page_html = fs.readFileSync("custom_sub/amnezia.html").toString();
 const not_found_page_html = fs.readFileSync("custom_sub/404.html").toString();
 var AMNEZIA_COEFFICIENT = 6.6666;
@@ -44,6 +45,8 @@ const {
     reload_agents,
     reset_marzban_user,
     unlock_marzban_user,
+    revoke_marzban_subscription,
+    generate_happ_crypto_link,
     delete_folder_content,
     enable_panel,
     disable_panel,
@@ -331,6 +334,7 @@ app.post("/create_panel", async (req, res) => {
         panel_country,
         panel_user_max_count,
         panel_traffic,
+        default_ip_limit,
         access_token } = req.body;
 
 
@@ -361,6 +365,7 @@ app.post("/create_panel", async (req, res) => {
             active_users: panel_info.active_users,
             total_users: panel_info.total_users,
             panel_type:panel_info.panel_type,
+            default_ip_limit: parseInt(default_ip_limit || 1),
         });
 
         var account_id = (await token_to_account(access_token)).id;
@@ -384,8 +389,7 @@ app.post("/create_user", async (req, res) => {
         ip_limit,
      } = req.body;
 
-    // TEMP
-    ip_limit = 1;
+    // ip_limit از پنل خوانده می‌شود و Agent قادر به تغییر آن نیست
 
 
         if(process.env.RELEASE == "ARMAN") flow_status = "xtls-rprx-vision";
@@ -402,6 +406,9 @@ app.post("/create_user", async (req, res) => {
     var panels_arr = await get_panels();
     var selected_panel = panels_arr.filter(x => x.panel_country == country )[0];
     var agent_user_count = (await get_all_users()).filter(x => x.agent_id == agent_id).length;
+
+    // تعیین ip_limit پیش‌فرض بر اساس پنل
+    ip_limit = (selected_panel?.default_ip_limit && !isNaN(selected_panel.default_ip_limit)) ? parseInt(selected_panel.default_ip_limit) : 1;
 
     if (corresponding_agent.disable) res.send({ status: "ERR", msg: "your account is disabled" })
     else if (!corresponding_agent.create_access) res.send({ status: "ERR", msg: "access denied" })
@@ -453,6 +460,11 @@ app.post("/create_user", async (req, res) => {
 
             var inbounds = proxy_obj_maker(protocols,flow_status,2)
 
+            const plainSubUrl = "https://" + get_sub_url() + "/sub/" + uidv2(10);
+            let cryptoSubUrl = null;
+            try {
+                cryptoSubUrl = await generate_happ_crypto_link(plainSubUrl);
+            } catch(e) {}
             await insert_to_users({
                 id: uid(),
                 agent_id,
@@ -467,7 +479,8 @@ app.post("/create_user", async (req, res) => {
                 corresponding_panel_id: selected_panel.id,
                 corresponding_panel: selected_panel.panel_url,
                 real_subscription_url: (mv.subscription_url.startsWith("/")?selected_panel.panel_url:"") + mv.subscription_url,
-                subscription_url: "https://" + get_sub_url() + "/sub/" + uidv2(10),
+                subscription_url: plainSubUrl,
+                subscription_url_crypto: cryptoSubUrl || plainSubUrl,
                 links: mv.links,
                 created_at:Math.floor(Date.now()/1000),
                 disable_counter:{value:0,last_update:Math.floor(Date.now() / 1000)},
@@ -476,6 +489,7 @@ app.post("/create_user", async (req, res) => {
                 desc,
                 ip_limit,
                 xray_subscription_url: mv.xray_subscription_url || "",
+                happ_hwids: [],
             });
 
             if(selected_panel.panel_type == "MZ") await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit) });
@@ -811,6 +825,7 @@ app.post("/edit_panel", async (req, res) => {
         panel_password,
         panel_user_max_count,
         panel_traffic,
+        default_ip_limit,
         access_token } = req.body;
 
 
@@ -829,6 +844,7 @@ app.post("/edit_panel", async (req, res) => {
             panel_url,
             panel_user_max_count: parseInt(panel_user_max_count),
             panel_traffic: format_number(panel_traffic),
+            ...(default_ip_limit ? { default_ip_limit: parseInt(default_ip_limit) } : {})
         });
 
         if(old_panel_obj.panel_url != panel_url)
@@ -1026,6 +1042,19 @@ app.post("/edit_user", async (req, res) => {
                 `${modeInfo} of user !${user_obj.username} with !${data_limit} GB data and !${expire} days of expire time (!${panelType}) ${resetInfo}. Cost: !${cost} units.`,
                 access_token
             );
+            // اگر لینک ساب کاربر «غیرکریپتو/مستقیم» باشد، در تمدید برایش لینک توکنی ایجاد می‌کنیم
+            try {
+                const updatedUser = await get_user1(user_id);
+                let currentSub = updatedUser.subscription_url || "";
+                if(currentSub.startsWith("http")) {
+                    const newSub = "https://" + get_sub_url() + "/sub/" + uidv2(10);
+                    currentSub = newSub;
+                    await update_user(user_id,{subscription_url:newSub});
+                }
+                let cryptoSub = null;
+                try { cryptoSub = await generate_happ_crypto_link(currentSub); } catch(e){}
+                if(cryptoSub) await update_user(user_id,{subscription_url_crypto: cryptoSub});
+            } catch(e){}
             if(old_country == country) 
             {
                 if(user_obj.protocols != protocols || user_obj.flow_status != flow_status) update_user_links_bg(panel_obj.panel_url,panel_obj.panel_username,panel_obj.panel_password,user_obj.username,user_obj.id)
@@ -1073,6 +1102,92 @@ app.post("/edit_self", async (req, res) => {
         await insert_to_logs(account.id, "EDIT_SELF", `was self edited`,access_token);
         res.send("DONE");
     } 
+});
+
+app.post("/set_support_url", async (req, res) => {
+    try {
+        const { access_token, support_url } = req.body;
+        const account = await token_to_account(access_token);
+        if(!account) return res.send({ status: "ERR", msg: "invalid token" });
+        if(account.is_admin == 1) {
+            // ادمین هم می‌تواند برای خودش ست کند، اما هدف اصلی Agent است
+            await update_account(account.id, { support_url: support_url || "" });
+        } else {
+            await update_account(account.id, { support_url: support_url || "" });
+        }
+        await insert_to_logs(account.id, "SET_SUPPORT_URL", `updated support url`, access_token);
+        res.send("DONE");
+    } catch(err) {
+        res.send({ status: "ERR", msg: "failed to set support url" });
+    }
+});
+
+app.post("/set_global_announce", async (req, res) => {
+    try {
+        const { access_token, announce } = req.body;
+        const account = await token_to_account(access_token);
+        if(!account || account.is_admin != 1) return res.send({ status: "ERR", msg: "access denied" });
+        await (await redis_client()).set("HAPP_ANNOUNCE", announce || "");
+        await insert_to_logs(account.id, "SET_GLOBAL_ANNOUNCE", `updated global announce`, access_token);
+        res.send("DONE");
+    } catch(err) {
+        res.send({ status: "ERR", msg: "failed to set announce" });
+    }
+});
+
+app.post("/regenerate_user", async (req, res) => {
+    try {
+        const { username, access_token } = req.body;
+        if(!username) return res.send({ status: "ERR", msg: "invalid inputs" });
+        const user_obj = await get_user2(username);
+        if(!user_obj) return res.send({ status: "ERR", msg: "user not found" });
+        const panel_obj = await get_panel(user_obj.corresponding_panel_id);
+        const agent = await token_to_account(access_token);
+        if(!agent) return res.send({ status: "ERR", msg: "invalid token" });
+        if (agent.disable) return res.send({ status: "ERR", msg: "your account is disabled" });
+        if(!agent.edit_access) return res.send({ status: "ERR", msg: "access denied" });
+        if (!agent.country.split(",").includes(panel_obj.panel_country)) return res.send({ status: "ERR", msg: "country access denied" });
+
+        const protocols = Object.keys(user_obj.inbounds || {});
+        let flow_status = "none";
+        try { flow_status = user_obj.inbounds?.vless?.flow || "none"; } catch(e){}
+        const inbounds = user_obj.inbounds || {};
+        const ip_limit = user_obj.ip_limit || 1;
+        const data_limit = user_obj.data_limit;
+        const expire = user_obj.expire;
+
+        const delRes = await delete_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
+        if(delRes == "ERR") return res.send({ status: "ERR", msg: "failed to delete user on panel" });
+        const mv = await make_vpn(
+            panel_obj.panel_url,
+            panel_obj.panel_username,
+            panel_obj.panel_password,
+            user_obj.username,
+            data_limit,
+            expire,
+            protocols,
+            flow_status,
+            inbounds,
+            ip_limit
+        );
+        if(mv == "ERR") return res.send({ status: "ERR", msg: "failed to recreate user on panel" });
+
+        const newSub = "https://" + get_sub_url() + "/sub/" + uidv2(10);
+        await update_user(user_obj.id, {
+            real_subscription_url: (mv.subscription_url.startsWith("/")?panel_obj.panel_url:"") + mv.subscription_url,
+            links: mv.links,
+            xray_subscription_url: mv.xray_subscription_url || "",
+            subscription_url: newSub,
+            happ_hwids: [],
+            used_traffic: 0,
+            status: "active",
+        });
+
+        await insert_to_logs(agent.id, "REGENERATE_USER", `regenerated user !${user_obj.username} and rotated subscription link`, access_token);
+        res.send("DONE");
+    } catch(err) {
+        res.send({ status: "ERR", msg: "failed to regenerate user" });
+    }
 });
 
 app.post("/reset_user", async (req, res) => {
@@ -1144,7 +1259,6 @@ app.post("/reset_user", async (req, res) => {
 app.post("/unlock_user", async (req, res) => {
     const { username, access_token } = req.body;
     var user_obj = await get_user2(username);
-    var user_id = user_obj.id;
     var panel_obj = await get_panel(user_obj.corresponding_panel_id);
     var corresponding_agent = await token_to_account(access_token);
 
@@ -1153,21 +1267,31 @@ app.post("/unlock_user", async (req, res) => {
     else if (!corresponding_agent.country.split(",").includes(panel_obj.panel_country)) res.send({ status: "ERR", msg: "country access denied" })
     else 
     {  
+        // Revoke subscription on Marzban side (rotates UUID and subscription URL)
+        var result = await revoke_marzban_subscription(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
+        if (result == "ERR") {res.send({ status: "ERR", msg: "failed to revoke on marzban" });return;}
 
-        var result = await unlock_marzban_user(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
-        if (result == "ERR") {res.send({ status: "ERR", msg: "failed to connect to marzban" });return;}
+        // Refresh real subscription URL and links from Marzban
+        update_user_links_bg(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username, user_obj.id);
 
-        var account = await token_to_account(access_token);
-        
-        // Add panel type and user status details to the log
+        // Rotate our crypto sub link and clear device HWIDs (no data/expire reset)
+        const newSub = "https://" + get_sub_url() + "/sub/" + uidv2(10);
+        let cryptoSub = null;
+        try { cryptoSub = await generate_happ_crypto_link(newSub); } catch(e){}
+        await update_user(user_obj.id, {
+            subscription_url: newSub,
+            subscription_url_crypto: cryptoSub || newSub,
+            happ_hwids: []
+        });
+
+        const account = await token_to_account(access_token);
         const panelType = panel_obj.panel_type;
         const userStatus = user_obj.status || "unknown";
         const daysRemaining = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
-        
         await insert_to_logs(
             account.id, 
-            "UNLOCK_USER", 
-            `unlocked user !${user_obj.username} (!${panelType}) with status !${userStatus}. Days remaining: !${daysRemaining}.`,
+            "REVOKE_SUBSCRIPTION", 
+            `revoked subscription for user !${user_obj.username} (!${panelType}) with status !${userStatus}. Days remaining: !${daysRemaining}. New sub token generated.`,
             access_token
         );
         res.send("DONE");
@@ -1593,7 +1717,108 @@ app.get(/^\/sub\/.+/,async (req,res) =>
     if(user_obj.length == 0) res.send(not_found_page_html);
     else
     {
-        if(user_obj[0].real_subscription_url.startsWith("http")) res.redirect(user_obj[0].real_subscription_url);
+        // اعمال محدودیت دستگاه بر اساس HWID و ip_limit
+        try
+        {
+            const hwid = req.headers['happ-device-id'] || req.headers['x-hwid'] || req.headers['device-id'] || req.query.hwid;
+            const u = user_obj[0];
+            const limit = parseInt(u.ip_limit || 0);
+            if(hwid && limit > 0)
+            {
+                const current = Array.isArray(u.happ_hwids) ? u.happ_hwids : [];
+                if(!current.includes(hwid))
+                {
+                    if(current.length >= limit)
+                    {
+                        res.status(403).send("Device limit reached");
+                        return;
+                    }
+                    current.push(hwid);
+                    await update_user(u.id,{happ_hwids: current});
+                }
+            }
+        }
+        catch(e){}
+
+        // برای پنل‌های مرزبان (MZ) به‌جای ریدایرکت، پاسخ سازگار با Happ برگردانده می‌شود
+        if(user_obj[0].real_subscription_url.startsWith("http"))
+        {
+            try 
+            {
+                // واکشی محتوای سابسکریپشن واقعی
+                const upstream = await axios.get(user_obj[0].real_subscription_url, { timeout: 10000 });
+                let body = typeof upstream.data === "string" ? upstream.data : "";
+
+                const username = user_obj[0].username;
+                const upload = 0;
+                const download = user_obj[0].used_traffic || 0;
+                const total = user_obj[0].data_limit || 0;
+                const expire = user_obj[0].expire || 0;
+
+                // خواندن support-url از حساب نماینده (درصورت نبود، خالی)
+                let supportUrl = "";
+                try {
+                    const agentAcc = await get_account(user_obj[0].agent_id);
+                    supportUrl = agentAcc?.support_url || "";
+                } catch(e){}
+
+                // announce سراسری از Redis (با fallback به env)
+                let announce = "";
+                try {
+                    announce = await (await redis_client()).get("HAPP_ANNOUNCE");
+                    if(!announce) announce = process.env.HAPP_ANNOUNCE || "";
+                } catch(e) {
+                    announce = process.env.HAPP_ANNOUNCE || "";
+                }
+
+                // ساخت پروفایل روتینگ: ایران مستقیم
+                const routingProfile = {
+                    Name: "IR-Direct",
+                    GlobalProxy: "true",
+                    RemoteDNSType: "DoH",
+                    RemoteDNSDomain: "https://cloudflare-dns.com/dns-query",
+                    RemoteDNSIP: "1.1.1.1",
+                    DomesticDNSType: "DoH",
+                    DomesticDNSDomain: "https://dns.google/dns-query",
+                    DomesticDNSIP: "8.8.8.8",
+                    Geoipurl: "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-v2ray-rules@release/geoip.dat",
+                    Geositeurl: "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-v2ray-rules@release/geosite.dat",
+                    DirectSites: ["geosite:ir"],
+                    DirectIp: ["geoip:ir", "geoip:private"],
+                    DomainStrategy: "IPIfNonMatch",
+                    FakeDNS: "false"
+                };
+                const routingBase64 = Buffer.from(JSON.stringify(routingProfile)).toString("base64");
+                const routingLink = `happ://routing/onadd/${routingBase64}`;
+
+                // هدرهای موردنیاز Happ
+                res.set('profile-title', username);
+                res.set('profile-update-interval', '1');
+                res.set('subscription-userinfo', `upload=${upload}; download=${download}; total=${total}; expire=${expire}`);
+                if(supportUrl) res.set('support-url', supportUrl);
+                if(announce) res.set('announce', announce);
+                res.set('routing', routingLink);
+
+                // خطوط سازگار در ابتدای بدنه
+                const lines = [
+                    `#profile-title: ${username}`,
+                    `#profile-update-interval: 1`,
+                    `#subscription-userinfo: upload=${upload}; download=${download}; total=${total}; expire=${expire}`,
+                    supportUrl ? `#support-url: ${supportUrl}` : null,
+                    announce ? `#announce: ${announce}` : null,
+                    routingLink
+                ].filter(Boolean);
+
+                body = lines.join("\n") + "\n" + body;
+                res.set('content-type','text/plain; charset=utf-8');
+                res.send(body);
+            }
+            catch(err)
+            {
+                // درصورت خطا، برای سازگاری قدیمی ریدایرکت می‌کنیم
+                res.redirect(user_obj[0].real_subscription_url);
+            }
+        }
         else
         {
             // اضافه کردن نام کاربری، تاریخ باقیمانده و وضعیت به صفحه HTML
