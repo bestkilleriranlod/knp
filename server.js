@@ -1771,33 +1771,12 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                     announce = process.env.HAPP_ANNOUNCE || "";
                 }
 
-                // ساخت پروفایل روتینگ: ایران مستقیم
-                const routingProfile = {
-                    Name: "IR-Direct",
-                    GlobalProxy: "true",
-                    RemoteDNSType: "DoH",
-                    RemoteDNSDomain: "https://cloudflare-dns.com/dns-query",
-                    RemoteDNSIP: "1.1.1.1",
-                    DomesticDNSType: "DoH",
-                    DomesticDNSDomain: "https://dns.google/dns-query",
-                    DomesticDNSIP: "8.8.8.8",
-                    Geoipurl: "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-v2ray-rules@release/geoip.dat",
-                    Geositeurl: "https://cdn.jsdelivr.net/gh/chocolate4u/Iran-v2ray-rules@release/geosite.dat",
-                    DirectSites: ["geosite:ir"],
-                    DirectIp: ["geoip:ir", "geoip:private"],
-                    DomainStrategy: "IPIfNonMatch",
-                    FakeDNS: "false"
-                };
-                const routingBase64 = Buffer.from(JSON.stringify(routingProfile)).toString("base64");
-                const routingLink = `happ://routing/onadd/${routingBase64}`;
-
                 // هدرهای موردنیاز Happ
                 res.set('profile-title', username);
                 res.set('profile-update-interval', '1');
                 res.set('subscription-userinfo', `upload=${upload}; download=${download}; total=${total}; expire=${expire}`);
                 if(supportUrl) res.set('support-url', supportUrl);
                 if(announce) res.set('announce', announce);
-                res.set('routing', routingLink);
 
                 // خطوط سازگار در ابتدای بدنه
                 const lines = [
@@ -1805,8 +1784,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                     `#profile-update-interval: 1`,
                     `#subscription-userinfo: upload=${upload}; download=${download}; total=${total}; expire=${expire}`,
                     supportUrl ? `#support-url: ${supportUrl}` : null,
-                    announce ? `#announce: ${announce}` : null,
-                    routingLink
+                    announce ? `#announce: ${announce}` : null
                 ].filter(Boolean);
 
                 body = lines.join("\n") + "\n" + body;
