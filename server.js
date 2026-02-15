@@ -1778,16 +1778,6 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 if(supportUrl) res.set('support-url', supportUrl);
                 if(announce) res.set('announce', announce);
 
-                // خطوط سازگار در ابتدای بدنه
-                const lines = [
-                    `#profile-title: ${username}`,
-                    `#profile-update-interval: 1`,
-                    `#subscription-userinfo: upload=${upload}; download=${download}; total=${total}; expire=${expire}`,
-                    supportUrl ? `#support-url: ${supportUrl}` : null,
-                    announce ? `#announce: ${announce}` : null
-                ].filter(Boolean);
-
-                body = lines.join("\n") + "\n" + body;
                 res.set('content-type','text/plain; charset=utf-8');
                 res.send(body);
             }
