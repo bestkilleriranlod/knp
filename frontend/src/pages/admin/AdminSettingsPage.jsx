@@ -43,6 +43,8 @@ const AdminSettingsPage = () => {
     const [fileName, setFileName] = useState("Choose File")
     const [isUploadBtnDisabled, setIsUploadBtnDisabled] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
+    const [announce, setAnnounce] = useState("")
+    const [saveAnnounceMode, setSaveAnnounceMode] = useState(false)
 
     useEffect(() => {
         setPanels_perm((selectedAdminToEdit && Boolean(selectedAdminToEdit.perms.panels)) || null)
@@ -189,6 +191,25 @@ const AdminSettingsPage = () => {
         getAdmins()
     }, [getAdmins])
 
+    const saveAnnounce = async (e) => {
+        e.preventDefault()
+        setSaveAnnounceMode(true)
+        try {
+            const res = await axios.post("/set_global_announce", { access_token, announce })
+            if (res.data.status === "ERR") {
+                setError_msg(res.data.msg || "BAD REQUEST")
+                setHasError(true)
+            } else {
+                setOk_msg("Global announce saved")
+                setHasOk(true)
+            }
+        } catch (err) {
+            setError_msg("Failed to save announce")
+            setHasError(true)
+        }
+        setSaveAnnounceMode(false)
+    }
+
     const handleBC = async () => {
         setShowBackupCard(true)
         const access_token = sessionStorage.getItem("access_token")
@@ -264,6 +285,19 @@ const AdminSettingsPage = () => {
                     </div>
                     <footer className="settings-page__footer flex justify-end">
                         <Button onClick={(e) => changeCrendtials(e)} className="primary" disabled={saveMode}>{saveMode ? "Saving..." : "Save"}</Button>
+                    </footer>
+                </form>
+            </section>
+
+            <section className={`${styles['change-credentials-section']}`} style={{ marginBottom: "1rem" }}>
+                <h2 style={{ marginBottom: "1rem" }}>Global Announce</h2>
+                <form autoComplete='off' className="settings-page flex flex-col gap-2" style={{ padding: "0 1rem" }}>
+                    <div className="modal__form__group">
+                        <label className="modal__form__label" htmlFor="announce">Message</label>
+                        <textarea className="modal__form__input" id="announce" name="announce" value={announce} onChange={(e) => setAnnounce(e.target.value)} rows={3} />
+                    </div>
+                    <footer className="settings-page__footer flex justify-end">
+                        <Button onClick={(e) => saveAnnounce(e)} className="primary" disabled={saveAnnounceMode}>{saveAnnounceMode ? "Saving..." : "Save"}</Button>
                     </footer>
                 </form>
             </section>
