@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 mongoose.connect('mongodb://127.0.0.1:27017/knaw');
 const fs = require('fs').promises;
 const crypto = require('crypto');
+const axios = require('axios');
+const https = require('https');
 const {JWT_SECRET_KEY} = process.env
 const {SUB_JWT_SECRET} = process.env
 const jwt = require('jsonwebtoken');
@@ -10,6 +12,89 @@ const child_process = require('child_process');
 const AdmZip = require('adm-zip');
 const jalali_moment = require('jalali-moment');
 const cron = require('node-cron');
+
+// X-UI Configuration
+const XUI_URL = process.env.XUI_URL || "http://127.0.0.1:2053";
+const XUI_USERNAME = process.env.XUI_USERNAME || "admin";
+const XUI_PASSWORD = process.env.XUI_PASSWORD || "admin";
+const XUI_INBOUND_PORT = parseInt(process.env.XUI_INBOUND_PORT || "8443");
+let XUI_COOKIE = "";
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
+const xui_login = async () => {
+    try {
+        const response = await axios.post(`${XUI_URL}/login`, {
+            username: XUI_USERNAME,
+            password: XUI_PASSWORD
+        }, { httpsAgent });
+        if (response.headers['set-cookie']) {
+            XUI_COOKIE = response.headers['set-cookie'].map(c => c.split(';')[0]).join('; ');
+            return true;
+        }
+    } catch (error) {
+        console.log("X-UI Login Error:", error.message);
+    }
+    return false;
+}
+
+const xui_call = async (method, path, data = null) => {
+    if (!XUI_COOKIE) await xui_login();
+    try {
+        const config = {
+            method,
+            url: `${XUI_URL}${path}`,
+            headers: {
+                'Cookie': XUI_COOKIE,
+                'Content-Type': 'application/json'
+            },
+            data,
+            httpsAgent
+        };
+        const response = await axios(config);
+        if(response.data && response.data.success === false && response.data.msg && response.data.msg.includes("login")) {
+             await xui_login();
+             config.headers['Cookie'] = XUI_COOKIE;
+             const retry = await axios(config);
+             return retry.data;
+        }
+        return response.data;
+    } catch (error) {
+        if (error.response && error.response.status === 401) {
+            await xui_login();
+            try {
+                const config = {
+                    method,
+                    url: `${XUI_URL}${path}`,
+                    headers: {
+                        'Cookie': XUI_COOKIE,
+                        'Content-Type': 'application/json'
+                    },
+                    data,
+                    httpsAgent
+                };
+                const response = await axios(config);
+                return response.data;
+            } catch (e) {
+                console.log(`X-UI Call Error (${path}):`, e.message);
+                return null;
+            }
+        }
+        console.log(`X-UI Call Error (${path}):`, error.message);
+        return null;
+    }
+}
+
+const get_xui_inbound = async () => {
+    // 3x-ui typically uses GET for list, but some versions might vary. 
+    // Debugging showed GET works for /panel/api/inbounds/list
+    const res = await xui_call('get', '/panel/api/inbounds/list');
+    if(res && res.success && res.obj) {
+        const inbound = res.obj.find(i => i.port === XUI_INBOUND_PORT);
+        return inbound;
+    }
+    return null;
+}
 
 const PRIMARY_DNS = process.env.PRIMARY_DNS || "8.8.8.8";
 const SECONDARY_DNS = process.env.SECONDARY_DNS || "8.8.4.4";
@@ -201,7 +286,7 @@ const get_system_status = async () =>
     {
         total_user: users.length,
         users_active: users.filter((item) => item.status == "active").length,
-        incoming_bandwidth: users.reduce((acc, item) => acc + item.lifetime_used_traffic + item.used_traffic, 0),
+        incoming_bandwidth: users.reduce((acc, item) => acc + item.lifetime_used_traffic + item.used_traffic + (item.xray_used_traffic || 0), 0),
         outgoing_bandwidth: 0,
         panel_type:"AMN",
     }
@@ -338,7 +423,8 @@ PersistentKeepalive = 25
         }
         else
         {
-            xray_uuid = (does_exist && does_exist.xray_uuid) ? does_exist.xray_uuid : uuidv4();
+            // User requested new UUID on unlock
+            xray_uuid = uuidv4();
         }
         xray_last_config = xray_info ? build_xray_client_config_from(xray_uuid, xray_info) : "";
         if(xray_last_config && xray_info)
@@ -484,7 +570,10 @@ PersistentKeepalive = 25
         await User.create(createObj);
     }
             
-    if(xray_available) await sync_xray_single_user(username);
+    if(xray_available) {
+         // Force sync with the just-created/updated UUID
+         await sync_xray_single_user(username);
+    }
     await sync_awg_single_user(username);
 
     return {
@@ -523,8 +612,10 @@ const get_user_for_marzban = async (username) =>
           },
 
           links: [user.connection_string],
-          lifetime_used_traffic: user.lifetime_used_traffic + user.used_traffic,
+          lifetime_used_traffic: user.lifetime_used_traffic + user.used_traffic + (user.xray_used_traffic || 0),
+          used_traffic: user.used_traffic + (user.xray_used_traffic || 0),
           subscription_url: user.subscription_url,
+          xray_subscription_url: user.xray_subscription_url || "",
           ip_limit: user.maximum_connections,
     }
 
@@ -544,12 +635,15 @@ const get_all_users_for_marzban = async () =>
         status: 1,
         created_at: 1,
         subscription_url: 1,
+        xray_subscription_url: 1,
+        xray_used_traffic: 1,
     }).lean()
 
 
     for(let user of users)
     {
-        user.lifetime_used_traffic = user.lifetime_used_traffic + user.used_traffic;
+        user.lifetime_used_traffic = user.lifetime_used_traffic + user.used_traffic + (user.xray_used_traffic || 0);
+        user.used_traffic = user.used_traffic + (user.xray_used_traffic || 0);
         user.created_at = format_timestamp(user.created_at);
     }
 
@@ -578,7 +672,7 @@ const format_timestamp = (timestamp) =>
 const reset_user_account = async (username) =>
 {
     const user_obj = await User.findOne({username});
-    await User.updateOne({username}, {used_traffic: 0, lifetime_used_traffic: user_obj.lifetime_used_traffic + user_obj.used_traffic});
+    await User.updateOne({username}, {used_traffic: 0, xray_used_traffic: 0, lifetime_used_traffic: user_obj.lifetime_used_traffic + user_obj.used_traffic + (user_obj.xray_used_traffic || 0)});
     if(await isXrayAvailable()) await sync_xray_single_user(username);
     return true;
 }
@@ -629,7 +723,8 @@ const edit_user = async (username, status, expire, data_limit) =>
                 expire,
                 data_limit,
                 used_traffic: 0,
-                lifetime_used_traffic: user_obj.lifetime_used_traffic + user_obj.used_traffic,
+                xray_used_traffic: 0,
+                lifetime_used_traffic: user_obj.lifetime_used_traffic + user_obj.used_traffic + (user_obj.xray_used_traffic || 0),
                 status: newStatus,
             }
         );
@@ -640,7 +735,8 @@ const edit_user = async (username, status, expire, data_limit) =>
             const xinfo = await get_xray_static_info();
             if(xinfo)
             {
-                const newUuid = uuidv4();
+                // Preserve existing UUID on renewal unless missing
+                const newUuid = user_obj.xray_uuid || uuidv4();
                 const cfg = build_xray_client_config_from(newUuid, xinfo);
                 const tempUser = { xray_last_config: cfg };
                 const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
@@ -659,6 +755,8 @@ const edit_user = async (username, status, expire, data_limit) =>
                     }
                 );
             }
+            // Reset traffic in 3x-ui on renewal
+            await xray_api_reset_client_traffic(username);
             await sync_xray_single_user(username);
         }
 
@@ -716,11 +814,15 @@ const delete_user = async (username) =>
     await replace_wg0_interface(interface_lines.join("\n"));
 
     await replace_amnezia_clients_table(JSON.stringify(clients_table,null,4));
-
-    await sync_awg_single_user(username);
+    
+    await sync_configs();
 
     await User.deleteOne({ username });
-    if(await isXrayAvailable()) await sync_xray_single_user(username);
+
+    if(await isXrayAvailable()) {
+        await sync_xray_from_db();
+    }
+    
     return true;
 }
 
@@ -817,101 +919,70 @@ const replace_amnezia_clients_table = async (new_table) =>
     await fs.unlink(`./temp${file_id}`);
 }
 
-const get_xray_container_id = async () =>
-{
-    return await exec("docker ps -qf name=amnezia-xray");
-}
+// Docker-specific Xray functions removed (get_xray_container_id, etc.)
 
 const isXrayAvailable = async () => {
     try {
-        const out = await exec("docker ps -qf name=amnezia-xray");
-        return out.trim().length > 0;
+        const inbound = await get_xui_inbound();
+        return !!inbound;
     } catch(e) {
         return false;
     }
 }
 
-const get_xray_server_config = async () =>
+let cached_xray_info = null;
+let last_xray_info_fetch = 0;
+
+const get_xray_static_info = async () =>
 {
-    var container_id = await get_xray_container_id();
-    if(!container_id) { console.log("Xray container not found"); return null; }
-    var raw = await exec_on_container(container_id,"cat /opt/amnezia/xray/server.json");
-    try { return JSON.parse(raw); } catch(err) { console.log(err); return null; }
+    const now = Date.now();
+    if (cached_xray_info && (now - last_xray_info_fetch < 60000)) {
+        return cached_xray_info;
+    }
+
+    const inbound = await get_xui_inbound();
+    if(!inbound) return cached_xray_info; 
+    
+    try {
+        const streamSettings = JSON.parse(inbound.streamSettings);
+        
+        const info = {
+            protocol: inbound.protocol,
+            port: inbound.port,
+            streamSettings: streamSettings,
+            settings: JSON.parse(inbound.settings)
+        };
+
+        cached_xray_info = info;
+        last_xray_info_fetch = now;
+        return info;
+    } catch(e) {
+        console.log("Error parsing 3x-ui inbound settings:", e);
+        return cached_xray_info;
+    }
 }
 
-const set_xray_server_config = async (configObj) =>
-{
-    var container_id = await get_xray_container_id();
-    if(!container_id) { console.log("Xray container not found"); return false; }
-    var file_id = uid();
-    var data = JSON.stringify(configObj, null, 4);
-    await fs.writeFile(`./temp${file_id}`,data);
-    await exec(`docker cp ./temp${file_id} ${container_id}:/opt/amnezia/xray/server.json`);
-    await fs.unlink(`./temp${file_id}`);
-    await exec("docker restart amnezia-xray");
-    return true;
-}
-
-const set_xray_server_config_soft = async (configObj) =>
-{
-    var container_id = await get_xray_container_id();
-    if(!container_id) { console.log("Xray container not found"); return false; }
-    var file_id = uid();
-    var data = JSON.stringify(configObj, null, 4);
-    await fs.writeFile(`./temp${file_id}`,data);
-    await exec(`docker cp ./temp${file_id} ${container_id}:/opt/amnezia/xray/server.json`);
-    await fs.unlink(`./temp${file_id}`);
-    try { await exec_on_container_sh(container_id, 'pkill -HUP xray || kill -HUP $(pidof xray) || true'); } catch(e) {}
-    return true;
-}
-
-const set_xray_port = async (new_port) =>
-{
-    const sconf = await get_xray_server_config();
-    if(!sconf || !sconf.inbounds || !sconf.inbounds[0]) return false;
-    sconf.inbounds[0].port = new_port;
-    await set_xray_server_config(sconf);
-    if(await isXrayAvailable()) await sync_xray_from_db();
-    return true;
-}
-
-const build_xray_client_obj = (user) =>
-{
-    return {
-        id: user.xray_uuid,
-        flow: "xtls-rprx-vision",
-    };
-}
-
-const uuidv4 = () =>
-{
+const uuidv4 = () => {
+    if (crypto.randomUUID) return crypto.randomUUID();
     const b = crypto.randomBytes(16);
     b[6] = (b[6] & 0x0f) | 0x40;
     b[8] = (b[8] & 0x3f) | 0x80;
     const hex = b.toString('hex');
     return `${hex.substr(0,8)}-${hex.substr(8,4)}-${hex.substr(12,4)}-${hex.substr(16,4)}-${hex.substr(20)}`;
-}
+};
 
-const get_xray_static_info = async () =>
+
+const get_xray_installer_uuid = async () =>
 {
-    const cfg = await get_xray_server_config();
-    const inbound = cfg && cfg.inbounds && cfg.inbounds[0];
-    const container_id = await get_xray_container_id();
-    if(!inbound || !container_id) return null;
-    const pub = await exec_on_container(container_id, "cat /opt/amnezia/xray/xray_public.key");
-    const sid = await exec_on_container(container_id, "cat /opt/amnezia/xray/xray_short_id.key");
-    return {
-        port: inbound.port,
-        serverName: inbound.streamSettings.realitySettings.serverNames[0],
-        publicKey: String(pub).trim(),
-        shortId: String(sid).trim(),
-        fingerprint: "chrome",
-    };
+    return null;
 }
 
 const build_xray_client_config_from = (xray_uuid, info) =>
 {
     const XRAY_ADDR = process.env.XRAY_SERVER_ADDRESS || process.env.SERVER_ADDRESS;
+    const streamSettings = info.streamSettings || {};
+    const protocol = info.protocol || "vless";
+    
     const obj = {
         inbounds: [
             { listen: "127.0.0.1", port: 10808, protocol: "socks", settings: { udp: true } }
@@ -919,30 +990,38 @@ const build_xray_client_config_from = (xray_uuid, info) =>
         log: { loglevel: "error" },
         outbounds: [
             {
-                protocol: "vless",
+                protocol: protocol,
                 settings: {
                     vnext: [
                         {
                             address: XRAY_ADDR,
                             port: info.port,
-                            users: [ { encryption: "none", flow: "xtls-rprx-vision", id: xray_uuid } ]
+                            users: [ { encryption: "none", flow: (protocol === 'vless' && streamSettings.security === 'reality') ? "xtls-rprx-vision" : "", id: xray_uuid } ]
                         }
                     ]
                 },
-                streamSettings: {
-                    network: "tcp",
-                    realitySettings: {
-                        fingerprint: info.fingerprint,
-                        publicKey: info.publicKey,
-                        serverName: info.serverName,
-                        shortId: info.shortId,
-                        spiderX: ""
-                    },
-                    security: "reality"
-                }
+                streamSettings: streamSettings
             }
         ]
     };
+
+    // Fix reality settings for client side (if it's reality)
+    if (streamSettings.security === 'reality') {
+        const reality = streamSettings.realitySettings || {};
+        const inner = reality.settings || reality;
+        obj.outbounds[0].streamSettings.realitySettings = {
+            fingerprint: reality.fingerprint || inner.fingerprint || "chrome",
+            publicKey: reality.publicKey || inner.publicKey || "",
+            serverName: (reality.serverNames && reality.serverNames.length > 0) ? reality.serverNames[0] : (inner.serverName || ""),
+            shortId: (reality.shortIds && reality.shortIds.length > 0) ? reality.shortIds[0] : (inner.shortId || ""),
+            spiderX: ""
+        };
+        // Remove server-side only reality settings
+        delete obj.outbounds[0].streamSettings.realitySettings.privateKey;
+        delete obj.outbounds[0].streamSettings.realitySettings.shortIds;
+        delete obj.outbounds[0].streamSettings.realitySettings.serverNames;
+    }
+
     return JSON.stringify(obj);
 }
 
@@ -958,7 +1037,7 @@ const build_xray_subscription_url_from = async (userLike, info) =>
                 xray: {
                     last_config: userLike.xray_last_config,
                     port: String(xinfo.port),
-                    transport_proto: "tcp",
+                    transport_proto: xinfo.streamSettings?.network || "tcp",
                 },
                 container: "amnezia-xray",
             }
@@ -975,114 +1054,206 @@ const build_xray_subscription_url_from = async (userLike, info) =>
 
 const sync_xray_from_db = async () =>
 {
-    if(!(await isXrayAvailable())) { console.log("Xray not found → skip sync_xray_from_db()"); return; }
+    if(!(await isXrayAvailable())) { console.log("Xray not found (3x-ui) → skip sync_xray_from_db()"); return; }
+    
+    // 1. Get current state from 3x-ui
+    const inbound = await get_xui_inbound();
+    if(!inbound) return false;
+    
+    let currentClients = [];
+    try {
+        const settings = JSON.parse(inbound.settings);
+        if(settings && settings.clients) {
+            currentClients = settings.clients;
+        }
+    } catch(e) {
+        console.log("Error parsing inbound settings:", e);
+        return false;
+    }
+    
+    // Map of Email -> UUID for current panel clients
+    const panelClientsMap = new Map();
+    for(const c of currentClients) {
+        if(c.email) panelClientsMap.set(c.email, c.id);
+    }
+
+    // 2. Get active users from DB
     const now = get_now();
-    const xinfo = await get_xray_static_info();
-    const sconf = await get_xray_server_config();
-    if(!xinfo || !sconf) return false;
     const allActive = await User.find({ status: "active" }).lean();
-    const active = [];
+    const activeUsers = [];
+    
     for(const u of allActive)
     {
         const okExpire = (u.expire || 0) > now;
-        const okData = (u.data_limit || 0) === 0 || (u.used_traffic || 0) < (u.data_limit || 0);
-        if(okExpire && okData) active.push(u);
+        const okData = (u.data_limit || 0) === 0 || ((u.used_traffic || 0) + (u.xray_used_traffic || 0)) < (u.data_limit || 0);
+        if(okExpire && okData) activeUsers.push(u);
     }
-    const activeNames = active.map(u=>u.username);
-    for(const u of active)
+    
+    const activeUsernames = activeUsers.map(u => u.username);
+
+    // 3. Sync DB users to Panel
+    const xinfo = await get_xray_static_info();
+    
+    for(const u of activeUsers)
     {
-        let uidv = u.xray_uuid && u.xray_uuid.length > 0 ? u.xray_uuid : (crypto.randomUUID ? crypto.randomUUID() : uuidv4());
-        if(!u.xray_uuid || u.xray_uuid.length === 0)
-        {
-            await User.updateOne({ username: u.username }, { xray_uuid: uidv });
-            u.xray_uuid = uidv;
+        // Ensure UUID
+        if(!u.xray_uuid || u.xray_uuid.length === 0) {
+            if(panelClientsMap.has(u.username)) {
+                u.xray_uuid = panelClientsMap.get(u.username);
+            } else {
+                u.xray_uuid = (crypto.randomUUID ? crypto.randomUUID() : uuidv4());
+            }
+            await User.updateOne({ username: u.username }, { xray_uuid: u.xray_uuid });
         }
-        const cfg = build_xray_client_config_from(uidv, xinfo);
-        const tempUser = { xray_last_config: cfg };
-        const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
-        const xrayApiRaw = {
-            config_version: 1,
-            api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
-            protocol: "xray",
-            name: process.env.COUNTRY_EMOJI + " " + u.username,
-            description: generate_desc(u.expire, u.maximum_connections || 1),
-            api_key: jwt.sign({ username: u.username, proto: "xray" }, SUB_JWT_SECRET),
-        };
-        const xrayApiLink = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
-        await User.updateOne({ username: u.username }, { xray_last_config: cfg, xray_real_subscription_url: xraySubReal, xray_subscription_url: xrayApiLink });
-        
+
+        // Update Subscription Links in DB if needed (only if xinfo exists and something changed)
+        if(xinfo) {
+            const cfg = build_xray_client_config_from(u.xray_uuid, xinfo);
+            
+            // Only update if config changed or links are missing
+            if(u.xray_last_config !== cfg || !u.xray_real_subscription_url || !u.xray_subscription_url) {
+                const tempUser = { xray_last_config: cfg };
+                const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
+                const xrayApiRaw = {
+                    config_version: 1,
+                    api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
+                    protocol: "xray",
+                    name: process.env.COUNTRY_EMOJI + " " + u.username + "_xray",
+                    description: generate_desc(u.expire, u.maximum_connections || 1),
+                    api_key: jwt.sign({ username: u.username, proto: "xray" }, SUB_JWT_SECRET),
+                };
+                const xrayApiLink = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
+                
+                await User.updateOne({ username: u.username }, { 
+                    xray_last_config: cfg, 
+                    xray_real_subscription_url: xraySubReal, 
+                    xray_subscription_url: xrayApiLink 
+                });
+                
+                // Update local object to reflect changes for later checks in the same loop
+                u.xray_last_config = cfg;
+                u.xray_real_subscription_url = xraySubReal;
+                u.xray_subscription_url = xrayApiLink;
+            }
+        }
+
+        // Add to Panel if missing or update if needed
+        if(!panelClientsMap.has(u.username)) {
+            console.log(`Adding missing user to Xray: ${u.username}`);
+            await xray_api_add_client(u.xray_uuid, u.username, u.maximum_connections || 0, (u.expire || 0) * 1000, inbound);
+        } else {
+            const currentUuid = panelClientsMap.get(u.username);
+            const clientInPanel = currentClients.find(c => c.email === u.username);
+            
+            // Check if needs update (uuid change or disabled but should be active)
+            if(currentUuid !== u.xray_uuid) {
+                console.log(`Updating UUID for user ${u.username} (Panel: ${currentUuid} -> DB: ${u.xray_uuid})`);
+                
+                // Use updateClient to preserve stats if possible
+                if(clientInPanel) {
+                    clientInPanel.id = u.xray_uuid;
+                    clientInPanel.enable = true;
+                    clientInPanel.limitIp = u.maximum_connections || 0;
+                    clientInPanel.expiryTime = (u.expire || 0) * 1000;
+                    await xray_api_update_client(currentUuid, clientInPanel, inbound);
+                } else {
+                    // Fallback to remove/add if something is wrong with client object
+                    await xray_api_remove_client(u.username, inbound);
+                    await xray_api_add_client(u.xray_uuid, u.username, u.maximum_connections || 0, (u.expire || 0) * 1000, inbound);
+                }
+            } else if (clientInPanel && (!clientInPanel.enable || clientInPanel.limitIp !== (u.maximum_connections || 0) || clientInPanel.expiryTime !== (u.expire || 0) * 1000)) {
+                // Re-enable user or update limits
+                console.log(`Updating/Re-enabling user in Xray: ${u.username}`);
+                clientInPanel.enable = true;
+                clientInPanel.limitIp = u.maximum_connections || 0;
+                clientInPanel.expiryTime = (u.expire || 0) * 1000;
+                await xray_api_update_client(clientInPanel.id, clientInPanel, inbound);
+            }
+        }
     }
-    const clients = active.map(u=>build_xray_client_obj(u));
-    if(!sconf.inbounds || !sconf.inbounds[0] || !sconf.inbounds[0].settings) return false;
-    const oldClients = (sconf.inbounds[0].settings.clients) || [];
-    const normalize = (arr) => arr.map(c=>({ id: c.id, flow: c.flow })).sort((a,b)=> a.id.localeCompare(b.id) || a.flow.localeCompare(b.flow));
-    const beforeStr = JSON.stringify(normalize(oldClients));
-    const afterStr = JSON.stringify(normalize(clients));
-    if(beforeStr === afterStr)
-    {
-        await User.updateMany({ username: { $in: activeNames } }, { xray_enabled: true });
-        await User.updateMany({ username: { $nin: activeNames } }, { xray_enabled: false });
-        return true;
+
+    // 4. Update Panel clients that are not in Active Users (Disable or Remove)
+    for(const [email, uuid] of panelClientsMap) {
+        if(email === 'installer') continue; 
+        if(!activeUsernames.includes(email)) {
+             // Check if user exists in DB at all
+            const userInDb = await User.findOne({username: email});
+            if(userInDb) {
+                 // User exists but is inactive -> Disable
+                 const clientInPanel = currentClients.find(c => c.email === email);
+                 if(clientInPanel && clientInPanel.enable) {
+                     console.log(`Disabling inactive user in Xray: ${email}`);
+                     clientInPanel.enable = false;
+                     await xray_api_update_client(clientInPanel.id, clientInPanel, inbound);
+                 }
+            } else {
+                 // User deleted from DB -> Remove
+                 console.log(`Removing deleted user from Xray: ${email}`);
+                 await xray_api_remove_client(email, inbound);
+            }
+        }
     }
-    sconf.inbounds[0].settings.clients = clients;
-    await set_xray_server_config(sconf);
-    await User.updateMany({ username: { $in: activeNames } }, { xray_enabled: true });
-    await User.updateMany({ username: { $nin: activeNames } }, { xray_enabled: false });
+
     return true;
 }
 
-const sync_xray_single_user = async (username) =>
+const sync_xray_single_user = async (username, inboundOverride = null) =>
 {
-    if(!(await isXrayAvailable())) { console.log("Xray not found → skip sync_xray_single_user()" ); return false; }
-    const now = get_now();
-    const xinfo = await get_xray_static_info();
-    const sconf = await get_xray_server_config();
-    if(!xinfo || !sconf) return false;
-    const u = await User.findOne({ username }).lean();
-    if(!u) return false;
-    const okExpire = (u.expire || 0) > now;
-    const okData = (u.data_limit || 0) === 0 || (u.used_traffic || 0) < (u.data_limit || 0);
-    let uidv = u.xray_uuid && u.xray_uuid.length > 0 ? u.xray_uuid : (crypto.randomUUID ? crypto.randomUUID() : uuidv4());
-    if(!u.xray_uuid || u.xray_uuid.length === 0)
-    {
-        await User.updateOne({ username }, { xray_uuid: uidv });
-    }
-    const cfg = build_xray_client_config_from(uidv, xinfo);
-    const tempUser = { xray_last_config: cfg };
-    const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
-    const xrayApiRaw = {
-        config_version: 1,
-        api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
-        protocol: "xray",
-        name: process.env.COUNTRY_EMOJI + " " + username,
-        description: generate_desc(u.expire, u.maximum_connections || 1),
-        api_key: jwt.sign({ username: username, proto: "xray" }, SUB_JWT_SECRET),
-    };
-    const xrayApiLink = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
-    await User.updateOne({ username }, { xray_last_config: cfg, xray_real_subscription_url: xraySubReal, xray_subscription_url: xrayApiLink });
+    if(!(await isXrayAvailable())) return false;
+    
+    const user = await User.findOne({ username });
+    if(!user) return false; 
 
-    const oldClients = (sconf.inbounds && sconf.inbounds[0] && sconf.inbounds[0].settings && sconf.inbounds[0].settings.clients) ? sconf.inbounds[0].settings.clients : [];
-    let changed = false;
-    for (let i = oldClients.length - 1; i >= 0; i--) {
-        if (oldClients[i].id === u.xray_uuid || oldClients[i].id === uidv) {
-            oldClients.splice(i, 1);
-            changed = true;
+    const inbound = inboundOverride || await get_xui_inbound();
+    if(!inbound) return false;
+
+    const now = get_now();
+    const isActive = user.status === "active" && 
+                     (user.expire || 0) > now && 
+                     ((user.data_limit || 0) === 0 || ((user.used_traffic || 0) + (user.xray_used_traffic || 0)) < (user.data_limit || 0));
+
+    let currentClient = null;
+    try {
+        const settings = JSON.parse(inbound.settings);
+        if(settings && settings.clients) {
+            currentClient = settings.clients.find(c => c.email === username);
+        }
+    } catch(e) {}
+
+    if(isActive) {
+        if(!user.xray_uuid) {
+            user.xray_uuid = (crypto.randomUUID ? crypto.randomUUID() : uuidv4());
+            await User.updateOne({ username }, { xray_uuid: user.xray_uuid });
+        }
+
+        if(!currentClient) {
+            await xray_api_add_client(user.xray_uuid, username, user.maximum_connections || 0, (user.expire || 0) * 1000, inbound);
+        } else {
+            if(currentClient.id !== user.xray_uuid) {
+                // Update client instead of remove/add to preserve stats
+                const oldUuid = currentClient.id;
+                currentClient.id = user.xray_uuid;
+                currentClient.enable = true;
+                currentClient.limitIp = user.maximum_connections || 0;
+                currentClient.expiryTime = (user.expire || 0) * 1000;
+                
+                await xray_api_update_client(oldUuid, currentClient, inbound);
+            } else if (!currentClient.enable || currentClient.limitIp !== (user.maximum_connections || 0) || currentClient.expiryTime !== (user.expire || 0) * 1000) {
+                // Re-enable user or update limits
+                currentClient.enable = true;
+                currentClient.limitIp = user.maximum_connections || 0;
+                currentClient.expiryTime = (user.expire || 0) * 1000;
+                await xray_api_update_client(currentClient.id, currentClient, inbound);
+            }
+        }
+    } else {
+        if(currentClient && currentClient.enable) {
+            // Disable user instead of remove
+            currentClient.enable = false;
+            await xray_api_update_client(currentClient.id, currentClient, inbound);
         }
     }
-    if (okExpire && okData) {
-        oldClients.push(build_xray_client_obj({ xray_uuid: uidv }));
-        changed = true;
-    }
-    if(changed)
-    {
-        sconf.inbounds[0].settings.clients = oldClients;
-        await set_xray_server_config(sconf);
-        await User.updateOne({ username }, { xray_enabled: okExpire && okData });
-    }
-    else
-    {
-        await User.updateOne({ username }, { xray_enabled: okExpire && okData });
-    }
+    
     return true;
 }
 
@@ -1247,33 +1418,27 @@ const get_real_subscription_url = async (api_key, installation_uuid) =>
 
 const update_users_subscription_desc = async () =>
 {
-    const users = await User.find();
+    const users = await User.find({ status: { $ne: 'disabled' } });
 
     console.log("===> Updating Sub Links");
 
     for(let user of users)
     {
-        if(user.connection_uuids.length == 0 && !user.has_been_unlocked && user.created_at + 86400 < get_now() && user.used_traffic == 0)
-        {
-            var subscription_url_raw = 
+        try {
+            const updateObj = {};
+            
+            // Update Amnezia WG subscription
+            updateObj.subscription_url = await build_awg_subscription_url(user);
+
+            // Update Xray subscription if enabled
+            if(user.xray_enabled)
             {
-                config_version:1,
-                api_endpoint:`https://${process.env.ENDPOINT_ADDRESS}/sub`,
-                protocol:"awg",
-                name:process.env.COUNTRY_EMOJI + " " + user.username,
-                description:generate_desc(user.expire,user.maximum_connections),
-                api_key:jwt.sign({username:user.username},SUB_JWT_SECRET),
+                updateObj.xray_subscription_url = await build_xray_subscription_url(user);
             }
-        
 
-            const subscription_url = await encode_amnezia_data(JSON.stringify(subscription_url_raw));
-
-            await User.updateOne({username: user.username},
-            {
-                subscription_url,
-            });
-
-            console.log(`User ${user.username} subscription description updated`);
+            await User.updateOne({username: user.username}, updateObj);
+        } catch (e) {
+            console.log(`Failed to update subscription desc for ${user.username}:`, e);
         }
     }
 
@@ -1327,7 +1492,7 @@ const build_xray_subscription_url = async (user) =>
         config_version: 1,
         api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
         protocol: "xray",
-        name: process.env.COUNTRY_EMOJI + " " + user.username,
+        name: process.env.COUNTRY_EMOJI + " " + user.username + "_xray",
         description: generate_desc(user.expire, user.maximum_connections || 1),
         api_key: jwt.sign({ username: user.username, proto: "xray" }, SUB_JWT_SECRET),
     };
@@ -1480,21 +1645,7 @@ const backup_data = async () =>
     await fs.writeFile("./dbbu/amnezia_interface.conf",amnezia_interface);
 
     let xrayBackedUp = false;
-    try
-    {
-        const xcid = await get_xray_container_id();
-        if(xcid && xcid.length > 0)
-        {
-            try { await fs.mkdir("./dbbu/xray"); } catch(err) {}
-            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/server.json ./dbbu/xray/server.json`); } catch(err) {}
-            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/clientsTable ./dbbu/xray/clientsTable`); } catch(err) {}
-            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/xray_public.key ./dbbu/xray/xray_public.key`); } catch(err) {}
-            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/xray_private.key ./dbbu/xray/xray_private.key`); } catch(err) {}
-            try { await exec(`docker cp ${xcid}:/opt/amnezia/xray/xray_short_id.key ./dbbu/xray/xray_short_id.key`); } catch(err) {}
-            xrayBackedUp = true;
-        }
-    }
-    catch(err) {}
+    // Xray backup skipped for 3x-ui
 
     var zip = new AdmZip();
     var zip_id = Date.now();
@@ -1504,32 +1655,179 @@ const backup_data = async () =>
     zip.addLocalFile("./dbbu/amnezia_clients_table.json");
     zip.addLocalFile("./dbbu/amnezia_interface.conf");
     zip.addLocalFile("./.env");
+    
+    // Backup 3x-ui database if exists
+    try {
+        const xuiDbPath = "/etc/x-ui/x-ui.db";
+        await fs.access(xuiDbPath);
+        zip.addLocalFile(xuiDbPath);
+        console.log("Added 3x-ui database to backup");
+    } catch(e) {
+        console.log("3x-ui database not found at /etc/x-ui/x-ui.db");
+    }
+
     zip.addLocalFolder("/etc/nginx/sites-available","sites-available");
     zip.addLocalFolder("/etc/letsencrypt/live","live");
-    if(xrayBackedUp) {
-        try { zip.addLocalFolder("./dbbu/xray","xray"); } catch(err) {}
-    }
 
     zip.writeZip(final_file);
 
     await fs.unlink("./dbbu/users.json");
     await fs.unlink("./dbbu/amnezia_clients_table.json");
     await fs.unlink("./dbbu/amnezia_interface.conf");
-    if(xrayBackedUp)
-    {
-        try
-        {
-            const files = await fs.readdir("./dbbu/xray");
-            for(const f of files)
-            {
-                try { await fs.unlink(`./dbbu/xray/${f}`); } catch(err) {}
-            }
-            try { await fs.rmdir("./dbbu/xray"); } catch(err) {}
-        }
-        catch(err) {}
-    }
 
     return final_file;
+}
+
+const ensure_xray_keys_from_backup = async () =>
+{
+    // Deprecated: X-UI handles its own keys/certs, or we manage them via API if needed.
+    return;
+}
+
+const with_retry = async (fn, maxRetries = 2, delay = 1000) => {
+    let lastError;
+    for (let i = 0; i <= maxRetries; i++) {
+        try {
+            const result = await fn();
+            if (result) return result;
+        } catch (e) {
+            lastError = e;
+        }
+        if (i < maxRetries) await sleep(delay / 1000); // sleep takes seconds
+    }
+    return false;
+}
+
+const xray_api_update_client = async (clientUuid, clientData, inboundOverride = null) => {
+    return await with_retry(async () => {
+        try {
+            const inbound = inboundOverride || await get_xui_inbound();
+            if(!inbound) return false;
+            
+            const settings = JSON.stringify({ clients: [clientData] });
+            
+            const res = await xui_call('post', `/panel/api/inbounds/updateClient/${clientUuid}`, {
+                id: inbound.id,
+                settings: settings
+            });
+            
+            return res && res.success;
+        } catch(e) {
+            console.log(`Error updating client via api (${clientData.email}):`, e.message);
+            return false;
+        }
+    });
+}
+
+const xray_api_reset_client_traffic = async (email, inboundOverride = null) => {
+    return await with_retry(async () => {
+        try {
+            const inbound = inboundOverride || await get_xui_inbound();
+            if(!inbound) return false;
+            
+            const res = await xui_call('post', `/panel/api/inbounds/resetClientTraffic/${inbound.id}/${email}`);
+            return res && res.success;
+        } catch(e) {
+            console.log(`Error resetting client traffic via api (${email}):`, e.message);
+            return false;
+        }
+    });
+}
+
+const xray_api_add_client = async (uuid, email, limitIp = 0, expiryTime = 0, inboundOverride = null) => {
+    return await with_retry(async () => {
+        try {
+            const inbound = inboundOverride || await get_xui_inbound();
+            if(!inbound) {
+                console.log(`Error adding client (${email}): Inbound not found on port ${XUI_INBOUND_PORT}`);
+                return false;
+            }
+            
+            const streamSettings = JSON.parse(inbound.streamSettings);
+            const isReality = streamSettings.security === 'reality';
+            
+            const client = {
+                id: uuid,
+                email: email,
+                flow: (inbound.protocol === 'vless' && isReality) ? "xtls-rprx-vision" : "",
+                limitIp: limitIp,
+                totalGB: 0,
+                expiryTime: expiryTime,
+                enable: true,
+                tgId: "",
+                subId: ""
+            };
+            
+            const settings = JSON.stringify({ clients: [client] });
+            
+            const res = await xui_call('post', '/panel/api/inbounds/addClient', {
+                id: inbound.id,
+                settings: settings 
+            });
+            
+            if(res && res.success) return true;
+            console.log(`Error adding client via api (${email}):`, res ? res.msg : "Unknown error");
+            return false;
+        } catch(e) {
+            console.log(`Error adding client via api (${email}):`, e.message);
+            return false;
+        }
+    });
+}
+
+const xray_api_remove_client = async (email, inboundOverride = null) => {
+    return await with_retry(async () => {
+        try {
+            const inbound = inboundOverride || await get_xui_inbound();
+            if(!inbound) return false;
+            
+            let clientUuid = "";
+            try {
+                const settings = JSON.parse(inbound.settings);
+                const client = settings.clients.find(c => c.email === email);
+                if(client) clientUuid = client.id;
+            } catch(e) {}
+            
+            if(!clientUuid) return true;
+
+            // Correct path found via debug: /panel/api/inbounds/{inboundId}/delClient/{clientUuid}
+            const res = await xui_call('post', `/panel/api/inbounds/${inbound.id}/delClient/${clientUuid}`);
+            return res && res.success;
+        } catch(e) {
+            console.log(`Error removing client via api (${email}):`, e.message);
+            return false;
+        }
+    });
+}
+
+const ensure_xray_stats_config = async () =>
+{
+    const inbound = await get_xui_inbound();
+    if(!inbound) {
+        console.log("Warning: X-UI Inbound not found on port " + XUI_INBOUND_PORT);
+        return false;
+    }
+    return true;
+}
+
+const get_xray_traffic_map = async () => {
+    try {
+        const inbound = await get_xui_inbound();
+        if(!inbound) return new Map();
+        
+        const map = new Map();
+        if (inbound.clientStats) {
+            for (const stat of inbound.clientStats) {
+                 if (stat.email) {
+                     map.set(stat.email, (stat.up || 0) + (stat.down || 0));
+                 }
+            }
+        }
+        return map;
+    } catch(e) {
+        console.log("Error getting xray traffic:", e);
+        return new Map();
+    }
 }
 
 const $sync_accounting = async () =>
@@ -1540,6 +1838,20 @@ const $sync_accounting = async () =>
     var clients_table = await get_amnezia_clients_table();
 
     const transferMap = await get_wg_transfers_map();
+    
+    let inbound = null;
+    if (await isXrayAvailable()) {
+        inbound = await get_xui_inbound();
+    }
+    
+    const xrayTrafficMap = new Map();
+    if (inbound && inbound.clientStats) {
+        for (const stat of inbound.clientStats) {
+            if (stat.email) {
+                xrayTrafficMap.set(stat.email, (stat.up || 0) + (stat.down || 0));
+            }
+        }
+    }
 
     // اول مطمئن شویم که دو خط اول [Interface] فعال هستند
     if(interface_lines[0].startsWith("#")) {
@@ -1553,24 +1865,29 @@ const $sync_accounting = async () =>
     {
 
 
-        const client_table_names = clients_table.map((item) => item.userData.clientName);
+        let client_table_user_obj = clients_table.find((item) => item.userData.clientName == user.username);
 
-        if(!client_table_names.includes(user.username))
+        if(!client_table_user_obj)
         {
-            if(!user.xray_enabled)
-            {
-                await Log.create({msg: `User ${user.username} not found in clients table, deleting user`});
-                console.log(`User ${user.username} not found in clients table, deleting user`);
-                await User.deleteOne({username: user.username});
-            }
-            else
-            {
-                // skip
-            }
-            continue;
-        }
+             let creation_date = new Date((user.expire || get_now()) * 1000).toString().split(" GMT")[0];
+             creation_date = creation_date.split(" ");
+             const temp = creation_date[creation_date.length - 1];
+             creation_date[creation_date.length - 1] = creation_date[creation_date.length - 2];
+             creation_date[creation_date.length - 2] = temp;
+             creation_date = creation_date.join(" ");
 
-        const client_table_user_obj = clients_table.find((item) => item.userData.clientName == user.username);
+             client_table_user_obj = { 
+                 clientId: user.public_key, 
+                 userData: { 
+                     clientName: user.username, 
+                     creationDate: creation_date 
+                 } 
+             };
+             clients_table.push(client_table_user_obj);
+             
+             await replace_amnezia_clients_table(JSON.stringify(clients_table, null, 4));
+             console.log(`Restored missing user ${user.username} to clients table`);
+        }
 
         const used_traffic = transferMap.get(user.public_key) ?? false;
 
@@ -1597,17 +1914,42 @@ const $sync_accounting = async () =>
 
         }
 
-        /*
-        if(user.used_traffic >= user.data_limit)
+        if(xrayTrafficMap.has(user.username))
+        {
+            const xrayVal = xrayTrafficMap.get(user.username);
+            const currentXrayUsed = user.xray_used_traffic || 0;
+            const lastXrayCaptured = user.xray_last_captured_traffic || 0;
+            
+            if(xrayVal != lastXrayCaptured)
+            {
+                 let inc = 0;
+                 if(xrayVal >= lastXrayCaptured) {
+                     inc = xrayVal - lastXrayCaptured;
+                 } else {
+                     inc = xrayVal;
+                 }
+                 
+                 if (inc > 0) {
+                     const newUsed = currentXrayUsed + inc;
+                     await User.updateOne({username: user.username}, { xray_used_traffic: newUsed, xray_last_captured_traffic: xrayVal });
+                     user.xray_used_traffic = newUsed;
+                     console.log(`User ${user.username} Xray traffic updated to ${b2gb(newUsed)} MB (increment)`);
+                 } else {
+                     await User.updateOne({username: user.username}, { xray_last_captured_traffic: xrayVal });
+                 }
+            }
+        }
+
+        if((user.used_traffic + (user.xray_used_traffic || 0)) >= user.data_limit)
         {
             if(user.status == "active") 
             {
                 await User.updateOne({username: user.username}, {status: "limited"});
                 user.status = "limited";
                 console.log(`User ${user.username} status changed to limited`);
+                if(inbound) await sync_xray_single_user(user.username, inbound);
             }
         }
-        */
 
         if(user.expire < get_now())
         {
@@ -1616,14 +1958,16 @@ const $sync_accounting = async () =>
                 await User.updateOne({username: user.username}, {status: "expired"});
                 user.status = "expired";
                 console.log(`User ${user.username} status changed to expired`);
+                if(inbound) await sync_xray_single_user(user.username, inbound);
             }
         }
 
-        if(user.status == "limited" && user.used_traffic < user.data_limit)
+        if(user.status == "limited" && (user.used_traffic + (user.xray_used_traffic || 0)) < user.data_limit)
         {
             await User.updateOne({username: user.username}, {status: "active"});
             user.status = "active";
             console.log(`User ${user.username} status changed to active`);
+            if(inbound) await sync_xray_single_user(user.username, inbound);
         }
 
         if(user.status == "expired" && user.expire > get_now())
@@ -1631,6 +1975,7 @@ const $sync_accounting = async () =>
             await User.updateOne({username: user.username}, {status: "active"});
             user.status = "active";
             console.log(`User ${user.username} status changed to active`);
+            if(inbound) await sync_xray_single_user(user.username, inbound);
         }
 
 
@@ -1722,6 +2067,8 @@ const user_schema = new mongoose.Schema
     xray_last_config: { type: String, default: "" },
     xray_real_subscription_url: { type: String, default: "" },
     xray_subscription_url: { type: String, default: "" },
+    xray_used_traffic: { type: Number, default: 0 },
+    xray_last_captured_traffic: { type: Number, default: 0 },
 
 },{collection: 'users',versionKey: false});
 
@@ -1737,6 +2084,8 @@ const Log = mongoose.model('Log', log_schema);
 
 module.exports = 
 {
+    User,
+    Log,
     uid,
     generate_token,
     b2gb,
@@ -1765,14 +2114,10 @@ module.exports =
     replace_amnezia_clients_table,
     sync_configs,
     get_amnezia_container_id,
-    get_xray_container_id,
-    isXrayAvailable,
-    get_xray_server_config,
-    set_xray_server_config,
-    set_xray_server_config_soft,
-    set_xray_port,
-    build_xray_client_obj,
+    // Xray Docker functions removed
+
     get_xray_static_info,
+    get_xui_inbound,
     build_xray_client_config_from,
     sync_xray_from_db,
     sync_xray_single_user,
@@ -1785,6 +2130,10 @@ module.exports =
     buildAwgConfigForUser,
     
     $sync_accounting,
-    User,
+    // er, Docker functions remod
     sync_awg_single_user,
+    ensure_xray_keys_from_backup,
+    get_xray_traffic_map,
+    ensure_xray_stats_config,
+    isXrayAvailable,
 }

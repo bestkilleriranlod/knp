@@ -56,41 +56,64 @@ async function main() {
       process.exit(0);
     }
 
-    const missing = await User.find({
-      $or: [{ xray_uuid: { $exists: false } }, { xray_uuid: "" }],
-    }).lean();
+    // Fix: Also include users with outdated configs/keys
+    const users = await User.find({}).lean();
 
     const xinfo = await get_xray_static_info();
     let updated = 0;
-
-    for (const u of missing) {
+    
+    for (const u of users) {
       if (u.status === 'active') {
-        const id = uuidv4();
-        const update = { xray_uuid: id };
-        if (xinfo) {
-          const cfg = build_xray_client_config_from(id, xinfo);
-          update.xray_last_config = cfg;
-          const tempUser = { xray_last_config: cfg };
-          const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
-          update.xray_real_subscription_url = xraySubReal;
-          const xrayApiRaw = {
-            config_version: 1,
-            api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
-            protocol: "xray",
-            name: process.env.COUNTRY_EMOJI + " " + u.username,
-            description: "",
-            api_key: jwt.sign({ username: u.username, proto: "xray" }, process.env.SUB_JWT_SECRET),
-          };
-          update.xray_subscription_url = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
+          
+        let needsUpdate = false;
+        let id = u.xray_uuid;
+        
+        // 1. Missing UUID
+        if (!id) {
+            id = uuidv4();
+            needsUpdate = true;
         }
-        update.xray_enabled = true;
-        await User.updateOne({ username: u.username }, update);
-        updated++;
+        
+        // 2. Check if current config matches xinfo
+        if (xinfo) {
+            const newCfg = build_xray_client_config_from(id, xinfo);
+            if (!u.xray_last_config || u.xray_last_config !== newCfg) {
+                needsUpdate = true;
+            }
+        }
+
+        if (needsUpdate) {
+            const update = { xray_uuid: id };
+            if (xinfo) {
+              const cfg = build_xray_client_config_from(id, xinfo);
+              update.xray_last_config = cfg;
+              const tempUser = { xray_last_config: cfg };
+              const xraySubReal = await build_xray_subscription_url_from(tempUser, xinfo);
+              update.xray_real_subscription_url = xraySubReal;
+              
+              // Only update sub url if missing
+              if (!u.xray_subscription_url) {
+                  const xrayApiRaw = {
+                    config_version: 1,
+                    api_endpoint: `https://${process.env.ENDPOINT_ADDRESS}/sub`,
+                    protocol: "xray",
+                    name: process.env.COUNTRY_EMOJI + " " + u.username + "_xray",
+                    description: "",
+                    api_key: jwt.sign({ username: u.username, proto: "xray" }, process.env.SUB_JWT_SECRET),
+                  };
+                  update.xray_subscription_url = await encode_amnezia_data(JSON.stringify(xrayApiRaw));
+              }
+            }
+            update.xray_enabled = true;
+            await User.updateOne({ username: u.username }, update);
+            updated++;
+        }
       }
     }
 
     await sync_xray_from_db();
     console.log(`UPDATED_USERS=${updated}`);
+    console.log(`\nIMPORTANT: Now run 'node fix_xray_sync.js' in the KNP root directory to sync these links to the main panel!`);
     process.exit(0);
   } catch (err) {
     console.log(err);

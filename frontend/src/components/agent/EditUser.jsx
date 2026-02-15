@@ -72,8 +72,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             }
 
             // تشخیص نوع پنل از روی شناسه پنل یا کشور
-            console.log("Panel ID:", item.corresponding_panel_id)
-            console.log("Panel Type:", panel_type)
+            // console.log("Panel ID:", item.corresponding_panel_id)
+            // console.log("Panel Type:", panel_type)
             
             if (panel_type === "AMN") {
                 setExpireInputType("plan_selection")
@@ -86,7 +86,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                     if (days > 75) closestDays = 90;
                     
                     // محاسبه هزینه براساس AMNEZIA_COEFFICIENT و رند کردن به بالا
-                    const AMNEZIA_COEFFICIENT = 2.3333; // مقدار یکسان با سرور
+                    const AMNEZIA_COEFFICIENT = 6.6666; // مقدار یکسان با سرور
                     const calculateCost = (days) => {
                         const exactCost = days * AMNEZIA_COEFFICIENT;
                         return Math.ceil(exactCost); // رند به بالا
@@ -271,14 +271,6 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     }
     
     const panel_type = getPanelType()
-    
-
-    const secondaryButtons = [
-        { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item.username) },
-        // فقط دکمه Unlock Account برای اکانت‌های Amnezia نمایش داده شود
-        ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item.id) }] : []),
-        { icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item.id, item.status) },
-    ]
 
     const b2gb = (bytes) => {
         return (bytes / (2 ** 10) ** 3).toFixed(2)
@@ -288,6 +280,50 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
         const time = timeStamp - Math.floor(Date.now() / 1000)
         return Math.floor(time / 86400) + 1
     }
+
+    // محاسبه وضعیت انقضا برای نمایش دکمه‌ها
+    const isUserExpired = () => {
+        if (!item) return true; // اگر کاربر وجود نداشته باشد، دکمه نمایش داده نشود
+        
+        // ۱. بررسی وضعیت متنی (شامل منقضی شده و محدود شده)
+        if (item.status === 'expired' || item.status === 'Expired' || item.status === 'limited' || item.status === 'Limited') {
+            return true;
+        }
+        
+        // ۲. بررسی زمان انقضا
+        if (item.expire) {
+            const days = timeStampToDay(item.expire);
+            if (days <= 0) {
+                return true;
+            }
+        }
+
+        // ۳. بررسی محدودیت حجمی (Data Limit)
+        // اگر حجم مصرف شده بیشتر یا مساوی حجم کل باشد، کاربر محدود شده است
+        if (item.data_limit && item.data_limit > 0) {
+            const used = parseFloat(item.used_traffic || 0);
+            const limit = parseFloat(item.data_limit);
+            if (used >= limit) {
+                return true;
+            }
+        }
+        
+        // ۴. بررسی وضعیت Inactive (زمانی که کاربر منقضی شده ولی وضعیت هنوز سینک نشده یا غیرفعال است)
+        // اگر وضعیت غیرفعال باشد ولی توسط ادمین دستی غیرفعال نشده باشد، فرض بر انقضا است
+        if ((item.status === 'inactive' || item.status === 'Inactive') && !item.disable) {
+             return true;
+        }
+
+        return false;
+    }
+    
+    const secondaryButtons = [
+        { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item?.username) },
+        // فقط دکمه Unlock Account برای اکانت‌های Amnezia نمایش داده شود
+        ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item?.id) }] : []),
+        // نمایش دکمه Power فقط در صورتی که کاربر منقضی یا محدود نشده باشد
+        ...(!isUserExpired() ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item?.id, item?.status) }] : []),
+    ]
 
     const handle_safu_change = (e) => {
         setSafu(e.target.checked)

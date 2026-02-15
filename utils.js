@@ -407,6 +407,58 @@ const unlock_marzban_user = async (link, username, password, vpn_name) => {
     }
 }
 
+// Try to revoke user's subscription (rotates UUID and subscription URL on Marzban side)
+const revoke_marzban_subscription = async (link, username, password, vpn_name) => {
+    try {
+        const headers = await auth_marzban(link, username, password);
+        if (headers == "ERR") return "ERR";
+        const candidates = [
+            `${link}/api/user/${vpn_name}/revoke_subscription`,
+            `${link}/api/user/${vpn_name}/revoke-subscription`,
+            `${link}/api/user/${vpn_name}/revoke`
+        ];
+        for (const url of candidates) {
+            try {
+                await axios.post(url, {}, { headers });
+                return "DONE";
+            } catch (e) {
+                continue;
+            }
+        }
+        return "ERR";
+    } catch (err) {
+        return "ERR";
+    }
+}
+
+// Generate Happ crypto deep-link (crypt5) using Happ API
+const generate_happ_crypto_link = async (plain_url) => {
+    try {
+        if(!plain_url) return null;
+        const apiUrl = "https://crypto.happ.su/api-v2.php";
+        const res = await axios.post(apiUrl, { url: plain_url }, { headers: { "Content-Type": "application/json" }, timeout: 10000 });
+        const data = res?.data;
+        if (typeof data === "string") {
+            if (data.startsWith("happ://")) return data;
+            // Sometimes servers may return plain text with spaces/newlines
+            const match = data.match(/happ:\/\/[^\s]+/);
+            if (match) return match[0];
+        } else if (typeof data === "object" && data) {
+            // Try common keys
+            for (const k of ["url", "link", "encrypted", "result"]) {
+                if (typeof data[k] === "string" && data[k].startsWith("happ://")) return data[k];
+            }
+            // Fallback: scan values
+            for (const v of Object.values(data)) {
+                if (typeof v === "string" && v.startsWith("happ://")) return v;
+            }
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
 const ping_panel = async (panel_obj) => {
     try {
         var { link, username, password } = panel_obj;
@@ -671,7 +723,8 @@ const update_user_links_bg = (panel_url,panel_username,panel_password,username,i
             update_user(id,
                         {
                             "real_subscription_url": (complete_user_info.subscription_url.startsWith("/")?panel_url:"")+complete_user_info.subscription_url,
-                            "links": complete_user_info.links
+                            "links": complete_user_info.links,
+                            "xray_subscription_url": complete_user_info.xray_subscription_url || ""
                         });
                         
             //console.log("updated links of user " + username);
@@ -1004,6 +1057,8 @@ module.exports = {
     reload_agents,
     reset_marzban_user,
     unlock_marzban_user,
+    revoke_marzban_subscription,
+    generate_happ_crypto_link,
     ping_panel,
     dl_file,
     show_url,

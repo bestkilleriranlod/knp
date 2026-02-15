@@ -206,6 +206,25 @@ const UsersPage = () => {
             setUnlockMode(false)
             return
         }
+        // Refresh users and agent info to reflect rotated sub link and cleared HWIDs
+        let users = (await axios.post("/get_users", { access_token, number_of_rows: rowsPerPage, current_page: currentPage, search_filter: searchedUsers, status_filter: selectedStatus.value, panel_type:get_panel_type(), })).data
+        if (users.status === "ERR") {
+            setError_msg(users.msg)
+            setHasError(true)
+            setUnlockMode(false)
+            return
+        }
+        var agent = (await axios.post("/get_agent", { access_token })).data
+        if (agent.status === "ERR") {
+            setError_msg(agent.msg)
+            setHasError(true)
+            setUnlockMode(false)
+            return
+        }
+        sessionStorage.setItem("agent", JSON.stringify(agent))
+        setAgent(agent)
+        sessionStorage.setItem("users", JSON.stringify(users.obj_arr))
+        setUsers(users.obj_arr)
         setShowVerifyUnlock(false)
         setUnlockMode(false)
     }
