@@ -977,10 +977,16 @@ app.post("/edit_user", async (req, res) => {
         const isReservation = mode === "reservation";
         const panelExpireToSet = isReservation ? (user_obj.expire + expireSeconds) : (Math.floor(Date.now() / 1000) + expireSeconds);
 
-        let panelDataLimitToSet = data_limit * ((2 ** 10) ** 3);
-        if (panel_obj.panel_type == "MZ" && !isUnlimitedPanel && isReservation) {
-            const remainingDataBytes = Math.max(0, (user_obj.data_limit - user_obj.used_traffic));
-            panelDataLimitToSet = remainingDataBytes + panelDataLimitToSet;
+        let panelDataLimitToSet;
+        if (isUnlimitedPanel) {
+            // برای پنل‌های Unlimited، همیشه دیتالیمیت صفر روی پنل ست می‌شود
+            panelDataLimitToSet = 0;
+        } else {
+            panelDataLimitToSet = data_limit * ((2 ** 10) ** 3);
+            if (panel_obj.panel_type == "MZ" && !isUnlimitedPanel && isReservation) {
+                const remainingDataBytes = Math.max(0, (user_obj.data_limit - user_obj.used_traffic));
+                panelDataLimitToSet = remainingDataBytes + panelDataLimitToSet;
+            }
         }
 
         var result = await edit_vpn(
@@ -1010,28 +1016,22 @@ app.post("/edit_user", async (req, res) => {
                 }
             }
 
-            // Log mode for debugging
-            console.log(`Edit user - Mode: ${mode}, Is reset data: ${is_reset_data}, Days to expire: ${expire}`);
-            
-            // Handle expire date based on mode
             let newExpireTime;
             if (mode === "reservation") {
-                // Reservation mode: Add days to current expire date
                 newExpireTime = user_obj.expire + (expire * 24 * 60 * 60);
-                console.log(`Edit user - Reservation mode: Adding ${expire} days to current expire date`);
             } else {
-                // Renewal mode: Set a new expire date from now
                 newExpireTime = Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60;
-                console.log(`Edit user - Renewal mode: Setting new expire date to ${expire} days from now`);
             }
-            
-            await update_user(user_id, {
+            const shouldClearAmneziaMigratedFlag = isUnlimitedPanel && user_obj.is_amnezia_migrated && mode === "renewal";
+            const updatePayload = {
                 expire: newExpireTime,
                 data_limit: panelDataLimitToSet,
                 inbounds,
                 safu:/*safu?1:0*/0,
                 desc
-            });
+            };
+            if (shouldClearAmneziaMigratedFlag) updatePayload.is_amnezia_migrated = false;
+            await update_user(user_id, updatePayload);
 
             if(panel_obj.panel_type == "MZ" && !isUnlimitedPanel)
             {
