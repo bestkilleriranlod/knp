@@ -153,11 +153,21 @@ app.post("/get_users", async (req, res) => {
     for(let i=0;i<obj_arr.length;i++)
     {
         const u = obj_arr[i];
-        if(!u.subscription_url_crypto && u.subscription_url && typeof u.subscription_url === "string" && u.subscription_url.includes("/sub/"))
+        if(!u.subscription_url_crypto && u.subscription_url && typeof u.subscription_url === "string")
         {
             try 
             {
-                const crypto = await generate_happ_crypto_link(u.subscription_url);
+                let subUrl = u.subscription_url;
+                const knpBase = "https://" + get_sub_url() + "/sub/";
+                if(subUrl.startsWith("http") && !subUrl.startsWith(knpBase))
+                {
+                    const newSub = knpBase + uidv2(10);
+                    await update_user(u.id,{subscription_url: newSub});
+                    subUrl = newSub;
+                    u.subscription_url = newSub;
+                }
+                if(!subUrl.includes("/sub/")) continue;
+                const crypto = await generate_happ_crypto_link(subUrl);
                 if(crypto)
                 {
                     await update_user(u.id,{subscription_url_crypto: crypto});
@@ -1145,7 +1155,11 @@ app.post("/set_global_announce", async (req, res) => {
         const { access_token, announce } = req.body;
         const account = await token_to_account(access_token);
         if(!account || account.is_admin != 1) return res.send({ status: "ERR", msg: "access denied" });
-        await (await redis_client()).set("HAPP_ANNOUNCE", announce || "");
+        const value = announce || "";
+        await (await accounts_clct()).updateMany({ is_admin: 1 }, { $set: { global_announce: value } });
+        try {
+            await (await redis_client()).set("HAPP_ANNOUNCE", value);
+        } catch(e) {}
         await insert_to_logs(account.id, "SET_GLOBAL_ANNOUNCE", `updated global announce`, access_token);
         res.send("DONE");
     } catch(err) {
@@ -1780,13 +1794,22 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                     supportUrl = agentAcc?.support_url || "";
                 } catch(e){}
 
-                // announce سراسری از Redis (با fallback به env)
                 let announce = "";
                 try {
-                    announce = await (await redis_client()).get("HAPP_ANNOUNCE");
-                    if(!announce) announce = process.env.HAPP_ANNOUNCE || "";
+                    const adminDoc = await (await accounts_clct()).findOne(
+                        { is_admin: 1, global_announce: { $exists: true } },
+                        { projection: { global_announce: 1 } }
+                    );
+                    if(adminDoc && adminDoc.global_announce) announce = adminDoc.global_announce;
                 } catch(e) {
-                    announce = process.env.HAPP_ANNOUNCE || "";
+                }
+                if(!announce) {
+                    try {
+                        announce = await (await redis_client()).get("HAPP_ANNOUNCE");
+                        if(!announce) announce = process.env.HAPP_ANNOUNCE || "";
+                    } catch(e) {
+                        announce = process.env.HAPP_ANNOUNCE || "";
+                    }
                 }
 
                 const userinfoStr = `upload=${upload}; download=${download}; total=${total}; expire=${expire}`;
