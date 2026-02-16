@@ -1822,6 +1822,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
 
                 let prefixLines = [];
                 if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
+                prefixLines.push(`#profile-update-interval: 1`);
                 if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
                 if(announce) prefixLines.push(`#announce: ${announce}`);
                 if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
