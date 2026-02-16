@@ -321,6 +321,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
         { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item?.username) },
         // فقط دکمه Unlock Account برای اکانت‌های مرزبان نمایش داده شود
         ...(panel_type === "MZ" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item?.id) }] : []),
+        // دکمه انتقال از Amnezia به مرزبان فقط برای اکانت‌های AMN نمایش داده شود
+        ...(panel_type === "AMN" ? [{ icon: <RefreshIcon />, type: "button", label: "Move to Marzban", className: "ghosted", onClick: () => onUnlockItem(item?.id, "MIGRATE_TO_MARZBAN") }] : []),
         // نمایش دکمه Power فقط در صورتی که کاربر منقضی یا محدود نشده باشد
         ...(!isUserExpired() ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item?.id, item?.status) }] : []),
     ]
