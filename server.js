@@ -150,41 +150,15 @@ app.post("/get_users", async (req, res) => {
         obj_arr = obj_arr.filter(x => panels.filter(y => y.id == x.corresponding_panel_id)[0].panel_type == panel_type);
     }
 
-    for(let i=0;i<obj_arr.length;i++)
-    {
-        const u = obj_arr[i];
-        if(!u.subscription_url_crypto && u.subscription_url && typeof u.subscription_url === "string")
-        {
-            try 
-            {
-                let subUrl = u.subscription_url;
-                const knpBase = "https://" + get_sub_url() + "/sub/";
-                if(subUrl.startsWith("http") && !subUrl.startsWith(knpBase))
-                {
-                    const newSub = knpBase + uidv2(10);
-                    await update_user(u.id,{subscription_url: newSub});
-                    subUrl = newSub;
-                    u.subscription_url = newSub;
-                }
-                if(!subUrl.includes("/sub/")) continue;
-                const crypto = await generate_happ_crypto_link(subUrl);
-                if(crypto)
-                {
-                    await update_user(u.id,{subscription_url_crypto: crypto});
-                    u.subscription_url_crypto = crypto;
-                }
-            }
-            catch(e){}
-        }
-    }
-    
+    // فعلاً لینک ساب به‌صورت مستقیم (بدون happ://) برای Agent نمایش داده می‌شود
+    // تا تست‌های Happ روی لینک خام انجام شود.
     if(!number_of_rows && !current_page) {current_page = 1;number_of_rows = 10;}
     var total_pages = Math.ceil(obj_arr.length / number_of_rows);
     obj_arr = obj_arr.slice((current_page - 1) * number_of_rows, number_of_rows * current_page);
 
     obj_arr = obj_arr.map(v=>
     {
-        if(v.subscription_url_crypto) v.subscription_url = v.subscription_url_crypto;
+        v.subscription_url_crypto = null;
         v.links[0] = v.subscription_url;
         return v;
     });
@@ -1817,12 +1791,14 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 res.set('profile-title', profileTitle);
                 res.set('profile-update-interval', '1');
                 res.set('subscription-userinfo', userinfoStr);
+                res.set('profile-web-page-url', 'https://google.com');
                 if(supportUrl) res.set('support-url', supportUrl);
                 if(announce) res.set('announce', announce);
 
                 let prefixLines = [];
                 if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
                 prefixLines.push(`#profile-update-interval: 1`);
+                prefixLines.push(`#profile-web-page-url: https://google.com`);
                 if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
                 if(announce) prefixLines.push(`#announce: ${announce}`);
                 if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
