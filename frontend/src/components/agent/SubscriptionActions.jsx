@@ -114,19 +114,6 @@ const SubscriptionActions = ({ item, subscriptionLink, config, onEditItem, shoul
                 </button>
                 <button
                     className="subscription-section__button"
-                    onMouseEnter={handleMouseEnter2}
-                    onMouseLeave={handleMouseLeave2}
-                    onClick={handleCopyConfigLink}
-                >
-
-                    {clickedButton === "config"
-                        ? <Tooltip isHovered={isHovered2}>Copied</Tooltip>
-                        : <Tooltip isHovered={isHovered2}>Copy Configs</Tooltip>
-                    }
-                    {clickedButton === "config" ? <CheckedIcon /> : <PasteIcon />}
-                </button>
-                <button
-                    className="subscription-section__button"
                     onMouseEnter={handleMouseEnter3}
                     onMouseLeave={handleMouseLeave3}
                     onClick={handleShowQRCode}
