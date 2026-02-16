@@ -229,6 +229,8 @@ const UsersPage = () => {
         sessionStorage.setItem("users", JSON.stringify(users.obj_arr))
         setUsers(users.obj_arr)
         setShowVerifyUnlock(false)
+        setShowEditUser(false)
+        setSelectedUser(null)
         setUnlockMode(false)
     }
 
