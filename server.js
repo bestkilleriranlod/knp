@@ -1327,6 +1327,18 @@ app.post("/unlock_user", async (req, res) => {
 
                 if(!targetPanel) { res.send({ status: "ERR", msg: "no marzban unlimited panel configured" }); return; }
 
+                // آماده‌سازی پروتکل‌ها و این‌باندها بر اساس پنل مقصد (نه یوزر امنزیا)
+                const panelInbounds = targetPanel.panel_inbounds || {};
+                let protocols = Object.keys(panelInbounds || {});
+                const inbounds = {};
+
+                for (const protocol of protocols) {
+                    const arr = (panelInbounds[protocol] || []).map(x => x.tag);
+                    if (arr.length > 0) inbounds[protocol] = arr;
+                }
+
+                protocols = Object.keys(inbounds);
+
                 const now = Math.floor(Date.now()/1000);
                 const remainingDays = Math.max(1, Math.floor((user_obj.expire - now)/86400));
 
@@ -1337,9 +1349,9 @@ app.post("/unlock_user", async (req, res) => {
                     user_obj.username,
                     0,
                     user_obj.expire,
-                    Object.keys(user_obj.inbounds),
-                    user_obj.inbounds.vless?.flow || "",
-                    user_obj.inbounds,
+                    protocols,
+                    "none",
+                    inbounds,
                     1
                 );
                 if(mv == "ERR") { res.send({ status: "ERR", msg: "failed to create user on marzban" }); return; }
