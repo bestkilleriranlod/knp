@@ -1872,7 +1872,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 {
                     if(current.length >= limit)
                     {
-                        res.status(403).send("Device limit reached");
+                        res.status(403).send("The subscription administrator has restricted access. Please contact technical support.");
                         return;
                     }
                     current.push(hwid);
