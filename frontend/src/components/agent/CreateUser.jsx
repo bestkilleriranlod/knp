@@ -113,12 +113,15 @@ const CreateUser = ({ onClose, showForm }) => {
 
 
             const panelType = panelInboundsObj.panel_type || "MZ";
+            const panelCountry = panelInboundsObj.panel_country || null;
             delete panelInboundsObj.panel_type;
+            delete panelInboundsObj.panel_country;
+            const isUnlimitedPanel = panelType === "MZ" && panelCountry === "unlimited1";
             
             const availableProtocolsName = Object.keys(panelInboundsObj);
             console.log("Available protocols:", availableProtocolsName);
             
-            if(panelType === "MZ")
+            if(panelType === "MZ" && !isUnlimitedPanel)
             {
                 setIsIpLimitDisabled(true)
                 setIsDataLimitDisabled(false)
@@ -135,7 +138,7 @@ const CreateUser = ({ onClose, showForm }) => {
                     label: `30 GB - 30 Days (30 Units)`
                 });
             }
-            else if(panelType === "AMN")
+            else if(panelType === "AMN" || isUnlimitedPanel)
             {
                 setIsDataLimitDisabled(true)
                 setIsIpLimitDisabled(true)
@@ -403,7 +406,8 @@ const CreateUser = ({ onClose, showForm }) => {
                                         panelType={expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"} 
                                         onSelectPlan={setSelectedPlan} 
                                         selectedPlan={selectedPlan}
-                                        availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0} // موجودی قابل اختصاص عامل
+                                        availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0}
+                                        amneziaCoefficient={JSON.parse(sessionStorage.getItem("agent"))?.amnezia_coefficient}
                                     />
                                 </div>
                             )}
