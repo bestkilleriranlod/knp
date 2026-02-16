@@ -55,7 +55,9 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const getPanelType = () => {
         if (!item) return "MZ"
 
-        if (item.data_limit === 0) return "AMN_UNLIMITED"
+        if (item.country && item.country.includes("unlimited1")) return "AMN_UNLIMITED"
+
+        if (item.data_limit === 0 || item.is_amnezia_migrated) return "AMN_UNLIMITED"
         
         if (item.corresponding_panel_id == 948263502 || 
             item.corresponding_panel_id == 855340348 || 
@@ -228,7 +230,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             }
             
             // Calculate values based on selected plan
-            const newDataLimit = panel_type === "AMN" ? 10000 : selectedPlan.dataLimit
+            const newDataLimit = (panel_type === "AMN" || panel_type === "AMN_UNLIMITED") ? 10000 : selectedPlan.dataLimit
             const daysToExpire = selectedPlan.days
             
             // Check how many days remain for the user and data usage
@@ -512,7 +514,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                             {/* کامپوننت انتخاب پلن */}
                             <div className={styles['plan-section']}>
                                 <PlanSelection 
-                                    panelType={panel_type} 
+                                    panelType={panel_type === "AMN" || panel_type === "AMN_UNLIMITED" ? "AMN" : "MZ"} 
                                     onSelectPlan={setSelectedPlan} 
                                     selectedPlan={selectedPlan}
                                     availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0}
