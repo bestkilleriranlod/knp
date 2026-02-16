@@ -210,6 +210,8 @@ app.post("/get_agent", async (req, res) => {
 
     agent.country = filteredCountries.filter(Boolean).join(",");
 
+    agent.amnezia_coefficient = AMNEZIA_COEFFICIENT;
+
     res.send(agent);
 });
 
@@ -457,6 +459,7 @@ app.post("/create_user", async (req, res) => {
     else if ((selected_panel.panel_type == "AMN" || isUnlimitedPanel) && expire % 30 != 0) res.send({ status: "ERR", msg: "invalid expire time" })
     else if ((selected_panel.panel_type == "AMN" || isUnlimitedPanel) && expire * AMNEZIA_COEFFICIENT > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
     else if (expire > corresponding_agent.max_days) res.send({ status: "ERR", msg: "maximum allowed days is " + corresponding_agent.max_days })
+    else if (selected_panel.panel_type == "AMN") res.send({ status: "ERR", msg: "amnezia users cannot be created" })
     else if (!isUnlimitedPanel && selected_panel.panel_type != "AMN" && corresponding_agent.min_vol > data_limit) res.send({ status: "ERR", msg: "minimum allowed data is " + corresponding_agent.min_vol })
     else if (corresponding_agent.max_users <= agent_user_count) res.send({ status: "ERR", msg: "maximum allowed users is " + corresponding_agent.max_users })
     else if (all_usernames.includes(corresponding_agent.prefix + "_" + username)) res.send({ status: "ERR", msg: "username already exists" })
@@ -592,6 +595,7 @@ app.post("/delete_user", async (req, res) => {
     var panel_obj = await get_panel(user_obj.corresponding_panel_id);
     if (agent_obj.disable) {res.send({ status: "ERR", msg: "your account is disabled" });return;}
     else if(!agent_obj.delete_access) {res.send({ status: "ERR", msg: "access denied" });return;}
+    else if(panel_obj.panel_type == "AMN") {res.send({ status: "ERR", msg: "amnezia users cannot be deleted" });return;}
     else if(!agent_obj.country.split(",").includes(user_obj.country)) {res.send({ status: "ERR", msg: "country access denied" });return;}
     var result = await delete_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, username);
     if (result == "ERR") res.send({ status: "ERR", msg: "failed to connect to marzban" })
@@ -938,6 +942,11 @@ app.post("/edit_user", async (req, res) => {
     var old_data_limit = b2gb(user_obj.data_limit);
     var old_expire = Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400) + 1;
     var old_country = user_obj.country;
+
+    if (panel_obj.panel_type == "AMN") {
+        res.send({ status: "ERR", msg: "amnezia users cannot be renewed" });
+        return;
+    }
 
     // برای دیباگ
     console.log("Edit user - Agent countries:", corresponding_agent.country);
@@ -1547,7 +1556,8 @@ app.post("/get_panel_inbounds", async (req, res) =>
             res.send
             ({
                 ...inbounds_arr,
-                panel_type:panel.panel_type
+                panel_type:panel.panel_type,
+                panel_country:panel.panel_country
             });     
         }
    
