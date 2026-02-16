@@ -319,8 +319,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     
     const secondaryButtons = [
         { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item?.username) },
-        // فقط دکمه Unlock Account برای اکانت‌های Amnezia نمایش داده شود
-        ...(panel_type === "AMN" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item?.id) }] : []),
+        // فقط دکمه Unlock Account برای اکانت‌های مرزبان نمایش داده شود
+        ...(panel_type === "MZ" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item?.id) }] : []),
         // نمایش دکمه Power فقط در صورتی که کاربر منقضی یا محدود نشده باشد
         ...(!isUserExpired() ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item?.id, item?.status) }] : []),
     ]
