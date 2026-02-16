@@ -1257,7 +1257,7 @@ app.post("/reset_user", async (req, res) => {
 
     if (corresponding_agent.disable) res.send({ status: "ERR", msg: "your account is disabled" })
     else if(!corresponding_agent.edit_access) res.send({ status: "ERR", msg: "access denied" })
-    else if (!corresponding_agent.country.split(",").includes(panel_obj.panel_country)) res.send({ status: "ERR", msg: "country access denied" })
+    else if (!corresponding_agent.country.split(",").includes(panel_obj.panel_country) && !(panel_obj.panel_type == "AMN" && mode === "MIGRATE_TO_MARZBAN")) res.send({ status: "ERR", msg: "country access denied" })
     else 
     {  
         if(panel_obj.panel_type == "MZ")
@@ -1322,13 +1322,16 @@ app.post("/unlock_user", async (req, res) => {
 
     if (corresponding_agent.disable) res.send({ status: "ERR", msg: "your account is disabled" })
     else if(!corresponding_agent.edit_access) res.send({ status: "ERR", msg: "access denied" })
-    else if (!corresponding_agent.country.split(",").includes(panel_obj.panel_country)) res.send({ status: "ERR", msg: "country access denied" })
+    else if (!corresponding_agent.country.split(",").includes(panel_obj.panel_country) && !(panel_obj.panel_type == "AMN" && mode === "MIGRATE_TO_MARZBAN")) res.send({ status: "ERR", msg: "country access denied" })
     else 
     {  
         // حالت ویژه: انتقال از Amnezia به مرزبان
         if(panel_obj.panel_type == "AMN" && mode === "MIGRATE_TO_MARZBAN")
         {
             try {
+                const nowCheck = Math.floor(Date.now()/1000);
+                if(user_obj.expire <= nowCheck) { res.send({ status: "ERR", msg: "amnezia expired users cannot be migrated" }); return; }
+
                 const panels = await get_panels();
 
                 // برای مهاجرت از همه پنل‌های AMN، همیشه به پنل Marzban با country = "unlimited1" منتقل می‌کنیم
