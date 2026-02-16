@@ -407,12 +407,14 @@ const unlock_marzban_user = async (link, username, password, vpn_name) => {
     }
 }
 
-// Try to revoke user's subscription (rotates UUID and subscription URL on Marzban side)
 const revoke_marzban_subscription = async (link, username, password, vpn_name) => {
     try {
         const headers = await auth_marzban(link, username, password);
         if (headers == "ERR") return "ERR";
         const candidates = [
+            // مسیر رسمی Marzban برای Revoke Subscription
+            `${link}/api/user/${vpn_name}/revoke_sub`,
+            // مسیرهای قدیمی/جایگزین برای سازگاری با نسخه‌ها یا فورک‌های دیگر
             `${link}/api/user/${vpn_name}/revoke_subscription`,
             `${link}/api/user/${vpn_name}/revoke-subscription`,
             `${link}/api/user/${vpn_name}/revoke`
