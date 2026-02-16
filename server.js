@@ -1751,8 +1751,12 @@ app.get(/^\/sub\/.+/,async (req,res) =>
         {
             try 
             {
-                const upstream = await axios.get(user_obj[0].real_subscription_url, { timeout: 10000 });
-                let body = typeof upstream.data === "string" ? upstream.data : "";
+                let body = "";
+                try {
+                    const linksArr = Array.isArray(user_obj[0].links) ? user_obj[0].links : [];
+                    if(linksArr.length) body = linksArr.join("\n");
+                    else if(typeof user_obj[0].real_subscription_url === "string") body = user_obj[0].real_subscription_url;
+                } catch(e){}
 
                 const username = user_obj[0].username;
                 const profileTitle = String(username || "").slice(0, 25);
