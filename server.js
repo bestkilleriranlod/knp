@@ -436,6 +436,7 @@ app.post("/create_user", async (req, res) => {
     var all_usernames = [...(await get_all_users()).map(x => x.username)];
     var panels_arr = await get_panels();
     var selected_panel = panels_arr.filter(x => x.panel_country == country )[0];
+    const isUnlimitedPanel = selected_panel && selected_panel.panel_type == "MZ" && selected_panel.panel_country === "unlimited1";
     var agent_user_count = (await get_all_users()).filter(x => x.agent_id == agent_id).length;
 
     // تعیین ip_limit پیش‌فرض بر اساس پنل
@@ -452,11 +453,11 @@ app.post("/create_user", async (req, res) => {
     else if (selected_panel.disable) res.send({ status: "ERR", msg: "panel is disabled" })
     else if (selected_panel.panel_traffic <= selected_panel.panel_data_usage) res.send({ status: "ERR", msg: "panel is out of traffic" })
     else if (selected_panel.panel_traffic - selected_panel.panel_data_usage < data_limit) res.send({ status: "ERR", msg: "insufficient traffic on server" });
-    else if (selected_panel.panel_type != "AMN" && data_limit > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
-    else if (selected_panel.panel_type == "AMN" && expire % 30 != 0) res.send({ status: "ERR", msg: "invalid expire time" })
-    else if (selected_panel.panel_type == "AMN" && expire * AMNEZIA_COEFFICIENT > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
+    else if (!isUnlimitedPanel && selected_panel.panel_type != "AMN" && data_limit > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
+    else if ((selected_panel.panel_type == "AMN" || isUnlimitedPanel) && expire % 30 != 0) res.send({ status: "ERR", msg: "invalid expire time" })
+    else if ((selected_panel.panel_type == "AMN" || isUnlimitedPanel) && expire * AMNEZIA_COEFFICIENT > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
     else if (expire > corresponding_agent.max_days) res.send({ status: "ERR", msg: "maximum allowed days is " + corresponding_agent.max_days })
-    else if (selected_panel.panel_type != "AMN" && corresponding_agent.min_vol > data_limit) res.send({ status: "ERR", msg: "minimum allowed data is " + corresponding_agent.min_vol })
+    else if (!isUnlimitedPanel && selected_panel.panel_type != "AMN" && corresponding_agent.min_vol > data_limit) res.send({ status: "ERR", msg: "minimum allowed data is " + corresponding_agent.min_vol })
     else if (corresponding_agent.max_users <= agent_user_count) res.send({ status: "ERR", msg: "maximum allowed users is " + corresponding_agent.max_users })
     else if (all_usernames.includes(corresponding_agent.prefix + "_" + username)) res.send({ status: "ERR", msg: "username already exists" })
     else {
@@ -471,13 +472,15 @@ app.post("/create_user", async (req, res) => {
         }
 
 
+        const panelDataLimitToSet = isUnlimitedPanel ? 0 : gb2b(data_limit);
+
         var mv = await make_vpn
                         (
                             selected_panel.panel_url,
                             selected_panel.panel_username,
                             selected_panel.panel_password,
                             corresponding_agent.prefix + "_" + username,
-                            gb2b(data_limit),
+                            panelDataLimitToSet,
                             Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60,
                             protocols,
                             flow_status,
@@ -503,7 +506,7 @@ app.post("/create_user", async (req, res) => {
                 disable: 0,
                 username: corresponding_agent.prefix + "_" + username,
                 expire: Math.floor(Date.now() / 1000) + expire * 24 * 60 * 60,
-                data_limit: gb2b(data_limit),
+                data_limit: panelDataLimitToSet,
                 used_traffic: 0.00,
                 lifetime_used_traffic: 0.00,
                 country,
@@ -523,12 +526,13 @@ app.post("/create_user", async (req, res) => {
                 happ_hwids: [],
             });
 
-            if(selected_panel.panel_type == "MZ") await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit) });
-            else if(selected_panel.panel_type == "AMN") await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - expire * AMNEZIA_COEFFICIENT)});
+            if(selected_panel.panel_type == "MZ" && !isUnlimitedPanel) await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit) });
+            else if(selected_panel.panel_type == "AMN" || isUnlimitedPanel) await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - expire * AMNEZIA_COEFFICIENT)});
             
 
             // Add more detailed log with panel type and cost (removed concurrent users)
-            const cost = selected_panel.panel_type == "AMN" ? 
+            const isUnlimitedPanelForLog = selected_panel.panel_type == "MZ" && selected_panel.panel_country === "unlimited1";
+            const cost = (selected_panel.panel_type == "AMN" || isUnlimitedPanelForLog) ? 
                 Math.ceil(expire * AMNEZIA_COEFFICIENT) : 
                 data_limit;
                 
@@ -595,52 +599,44 @@ app.post("/delete_user", async (req, res) => {
         
         if(panel_obj.panel_type == "MZ")
         {
-            // پیاده‌سازی منطق بازگشت وجه برای V2Ray مشابه امنزیا
-            // شرایط: کمتر از 150 مگابایت مصرف کرده باشد و کمتر از 7 روز گذشته باشد
-            
-            const usedTraffic = user_obj.used_traffic;
-            const creationTime = user_obj.created_at;
-            const currentTime = Math.floor(Date.now() / 1000);
-            const daysSinceCreation = Math.floor((currentTime - creationTime) / 86400);
-            const usedLessThan150MB = usedTraffic < gb2b(0.15);
-            const lessThan7DaysPassed = daysSinceCreation < 7;
-            
-            console.log(`Delete user - V2Ray refund check - Used traffic: ${b2gb(usedTraffic)} GB, Days since creation: ${daysSinceCreation}`);
-            
-            if (usedLessThan150MB && lessThan7DaysPassed) {
-                // محاسبه روزهای باقی‌مانده
-                const now = Math.floor(Date.now() / 1000);
-                const remainingDays = Math.max(0, Math.floor((user_obj.expire - now) / 86400));
-                
-                // محاسبه میزان بازگشت وجه بر اساس حجم باقی‌مانده (روزهای باقی‌مانده را در حجم روزانه ضرب می‌کنیم)
-                const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
-                const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
-                
-                // اعمال بازگشت وجه
-                await update_account(agent_obj.id, { 
-                    allocatable_data: format_number(agent_obj.allocatable_data + dataRefund)
-                });
-                
-                console.log(`Delete user - V2Ray refund granted - Remaining days: ${remainingDays}, Data refund: ${dataRefund} GB`);
-            } else {
-                // شرایط بازگشت وجه فراهم نیست
-                console.log(`Delete user - V2Ray refund denied - Used more than 150MB or more than 7 days passed`);
-                
-                // اگر منطق قبلی لازم بود حفظ شود، می‌توان اینجا نگه داشت
-                if(process.env.RELEASE == "ALI") {
-                    if(user_obj.used_traffic == 0)
-                    await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
-                }
-                else if(process.env.RELEASE != "REZA") {
-                    if( !(agent_obj.business_mode == 1 && (user_obj.used_traffic > user_obj.data_limit/4 || 7*86400 < (Math.floor(Date.now()/1000) - user_obj.created_at) )) ) 
-                    await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+            const isUnlimitedPanel = panel_obj.panel_country === "unlimited1";
+            if(!isUnlimitedPanel && user_obj.data_limit > 0)
+            {
+                const usedTraffic = user_obj.used_traffic;
+                const creationTime = user_obj.created_at;
+                const currentTime = Math.floor(Date.now() / 1000);
+                const daysSinceCreation = Math.floor((currentTime - creationTime) / 86400);
+                const usedLessThan150MB = usedTraffic < gb2b(0.15);
+                const lessThan7DaysPassed = daysSinceCreation < 7;
+
+                if (usedLessThan150MB && lessThan7DaysPassed) {
+                    const now = Math.floor(Date.now() / 1000);
+                    const remainingDays = Math.max(0, Math.floor((user_obj.expire - now) / 86400));
+                    const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
+                    const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
+
+                    await update_account(agent_obj.id, { 
+                        allocatable_data: format_number(agent_obj.allocatable_data + dataRefund)
+                    });
+                } else {
+                    if(process.env.RELEASE == "ALI") {
+                        if(user_obj.used_traffic == 0)
+                        await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+                    }
+                    else if(process.env.RELEASE != "REZA") {
+                        if( !(agent_obj.business_mode == 1 && (user_obj.used_traffic > user_obj.data_limit/4 || 7*86400 < (Math.floor(Date.now()/1000) - user_obj.created_at) )) ) 
+                        await update_account(agent_obj.id, { allocatable_data: format_number(agent_obj.allocatable_data + b2gb(user_obj.data_limit - user_obj.used_traffic)) });
+                    }
                 }
             }
         }
 
-        else if(panel_obj.panel_type == "AMN") 
+        const isUnlimitedPanel = panel_obj.panel_type == "MZ" && panel_obj.panel_country === "unlimited1";
+        const isAmnLikePanel = panel_obj.panel_type == "AMN" || isUnlimitedPanel;
+
+        if(isAmnLikePanel)
         {
-            if(user_obj.used_traffic < gb2b(0.15))
+            if(user_obj.used_traffic < gb2b(0.15) && !user_obj.is_amnezia_migrated)
             {
                 const now = Math.floor(Date.now()/1000);
                 const remaining_days = Math.max(0, Math.floor((user_obj.expire - now)/86400));
@@ -651,29 +647,37 @@ app.post("/delete_user", async (req, res) => {
         
         // Prepare refund information for logs
         let refundInfo = "";
-        const panelType = panel_obj.panel_type;
+        const isUnlimitedPanelForLog = panel_obj.panel_type == "MZ" && panel_obj.panel_country === "unlimited1";
+        const isAmnLikePanelForLog = panel_obj.panel_type == "AMN" || isUnlimitedPanelForLog;
+        const panelType = isUnlimitedPanelForLog ? "AMN_UNLIMITED" : panel_obj.panel_type;
         
         // V2Ray refund info
         if (panelType == "MZ") {
-            const usedLessThan150MB = user_obj.used_traffic < gb2b(0.15);
-            const lessThan7DaysPassed = Math.floor((Math.floor(Date.now() / 1000) - user_obj.created_at) / 86400) < 7;
-            
-            if (usedLessThan150MB && lessThan7DaysPassed) {
-                const remainingDays = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
-                const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
-                const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
-                refundInfo = `Refund granted: !${dataRefund} GB (${remainingDays} days remaining)`;
+            const isUnlimitedPanel = panel_obj.panel_country === "unlimited1" || user_obj.data_limit === 0;
+            if (!isUnlimitedPanel && user_obj.data_limit > 0) {
+                const usedLessThan150MB = user_obj.used_traffic < gb2b(0.15);
+                const lessThan7DaysPassed = Math.floor((Math.floor(Date.now() / 1000) - user_obj.created_at) / 86400) < 7;
+                
+                if (usedLessThan150MB && lessThan7DaysPassed) {
+                    const remainingDays = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
+                    const dailyDataAllocation = b2gb(user_obj.data_limit) / Math.floor((user_obj.expire - user_obj.created_at) / 86400);
+                    const dataRefund = Math.floor(remainingDays * dailyDataAllocation);
+                    refundInfo = `Refund granted: !${dataRefund} GB (${remainingDays} days remaining)`;
+                } else {
+                    refundInfo = "No refund (usage > 150MB or account > 7 days old)";
+                }
             } else {
-                refundInfo = "No refund (usage > 150MB or account > 7 days old)";
+                refundInfo = "No refund (unlimited panel)";
             }
         }
         
-        // Amnezia refund info
-        else if (panelType == "AMN") {
-            if (user_obj.used_traffic < gb2b(0.15)) {
+        else if (isAmnLikePanelForLog) {
+            if (user_obj.used_traffic < gb2b(0.15) && !user_obj.is_amnezia_migrated) {
                 const remainingDays = Math.max(0, Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400));
                 const amneziaCost = Math.ceil(remainingDays * AMNEZIA_COEFFICIENT);
                 refundInfo = `Refund granted: !${amneziaCost} units (${remainingDays} days remaining)`;
+            } else if (user_obj.is_amnezia_migrated) {
+                refundInfo = "No refund (migrated from AMN)";
             } else {
                 refundInfo = "No refund (usage > 150MB)";
             }
@@ -929,6 +933,7 @@ app.post("/edit_user", async (req, res) => {
 
     var user_obj = await get_user1(user_id);
     var panel_obj = await get_panel(user_obj.corresponding_panel_id);
+    const isUnlimitedPanel = panel_obj.panel_type == "MZ" && panel_obj.panel_country === "unlimited1";
     var corresponding_agent = await token_to_account(access_token);
     var old_data_limit = b2gb(user_obj.data_limit);
     var old_expire = Math.floor((user_obj.expire - Math.floor(Date.now() / 1000)) / 86400) + 1;
@@ -948,9 +953,9 @@ app.post("/edit_user", async (req, res) => {
     }
     // Ignore used_traffic > data_limit check if this is a renewal
     else if(b2gb(user_obj.used_traffic) > data_limit && mode !== "renewal") res.send({ status: "ERR", msg: "data limit can't be reduced" })
-    else if (panel_obj.panel_type != "AMN" &&  data_limit - old_data_limit > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
-    else if (panel_obj.panel_type == "AMN" && expire * AMNEZIA_COEFFICIENT > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
-    else if (panel_obj.panel_type == "AMN" && expire % 30 != 0) res.send({ status: "ERR", msg: "invalid expire time" })
+    else if (!isUnlimitedPanel && panel_obj.panel_type != "AMN" &&  data_limit - old_data_limit > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
+    else if ((panel_obj.panel_type == "AMN" || isUnlimitedPanel) && expire * AMNEZIA_COEFFICIENT > corresponding_agent.allocatable_data) res.send({ status: "ERR", msg: "not enough allocatable data" })
+    else if ((panel_obj.panel_type == "AMN" || isUnlimitedPanel) && expire % 30 != 0) res.send({ status: "ERR", msg: "invalid expire time" })
     else if (expire > corresponding_agent.max_days) res.send({ status: "ERR", msg: "maximum allowed days is " + corresponding_agent.max_days })
     else if (corresponding_agent.min_vol > data_limit) res.send({ status: "ERR", msg: "minimum allowed data is " + corresponding_agent.min_vol })
     else {
@@ -964,7 +969,7 @@ app.post("/edit_user", async (req, res) => {
         const panelExpireToSet = isReservation ? (user_obj.expire + expireSeconds) : (Math.floor(Date.now() / 1000) + expireSeconds);
 
         let panelDataLimitToSet = data_limit * ((2 ** 10) ** 3);
-        if (panel_obj.panel_type == "MZ" && isReservation) {
+        if (panel_obj.panel_type == "MZ" && !isUnlimitedPanel && isReservation) {
             const remainingDataBytes = Math.max(0, (user_obj.data_limit - user_obj.used_traffic));
             panelDataLimitToSet = remainingDataBytes + panelDataLimitToSet;
         }
@@ -1019,7 +1024,7 @@ app.post("/edit_user", async (req, res) => {
                 desc
             });
 
-            if(panel_obj.panel_type == "MZ")
+            if(panel_obj.panel_type == "MZ" && !isUnlimitedPanel)
             {
                 if (mode === "reservation") {
                     // Reservation mode for V2Ray: reset usage on panel and deduct agent data
@@ -1046,9 +1051,8 @@ app.post("/edit_user", async (req, res) => {
                 )) await update_account(corresponding_agent.id, { allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit + old_data_limit) });
             }
 
-            else if(panel_obj.panel_type == "AMN") 
+            else if(panel_obj.panel_type == "AMN" || isUnlimitedPanel) 
             {
-                // در امنزیا فقط مقدار هزینه بر اساس روزهای پلن محاسبه می‌شود
                 const cost = AMNEZIA_COEFFICIENT * expire;
 
                 // Reset usage on panel (reservation and renewal)
@@ -1069,8 +1073,8 @@ app.post("/edit_user", async (req, res) => {
 
 
             // Add more detailed log with panel type, mode (renewal/reservation), IP limit and cost
-            const panelType = panel_obj.panel_type;
-            const cost = panelType == "AMN" ? 
+            const panelType = isUnlimitedPanel ? "AMN_UNLIMITED" : panel_obj.panel_type;
+            const cost = (panel_obj.panel_type == "AMN" || isUnlimitedPanel) ? 
                 Math.ceil(expire * AMNEZIA_COEFFICIENT) : 
                 data_limit;
             
@@ -1302,7 +1306,7 @@ app.post("/reset_user", async (req, res) => {
 });
 
 app.post("/unlock_user", async (req, res) => {
-    const { username, access_token } = req.body;
+    const { username, access_token, mode } = req.body;
     var user_obj = await get_user2(username);
     var panel_obj = await get_panel(user_obj.corresponding_panel_id);
     var corresponding_agent = await token_to_account(access_token);
@@ -1312,6 +1316,75 @@ app.post("/unlock_user", async (req, res) => {
     else if (!corresponding_agent.country.split(",").includes(panel_obj.panel_country)) res.send({ status: "ERR", msg: "country access denied" })
     else 
     {  
+        // حالت ویژه: انتقال از Amnezia به مرزبان
+        if(panel_obj.panel_type == "AMN" && mode === "MIGRATE_TO_MARZBAN")
+        {
+            try {
+                const panels = await get_panels();
+
+                let targetPanel = null;
+                if (user_obj.data_limit == 0) {
+                    targetPanel = panels.find(p => p.panel_type == "MZ" && p.panel_country == "unlimited1");
+                } else {
+                    targetPanel = panels.find(p => p.panel_type == "MZ" && p.panel_country == user_obj.country);
+                }
+
+                if(!targetPanel) { res.send({ status: "ERR", msg: "no marzban panel for this country" }); return; }
+
+                const now = Math.floor(Date.now()/1000);
+                const remainingDays = Math.max(1, Math.floor((user_obj.expire - now)/86400));
+
+                const mv = await make_vpn(
+                    targetPanel.panel_url,
+                    targetPanel.panel_username,
+                    targetPanel.panel_password,
+                    user_obj.username,
+                    0,
+                    user_obj.expire,
+                    Object.keys(user_obj.inbounds),
+                    user_obj.inbounds.vless?.flow || "",
+                    user_obj.inbounds,
+                    1
+                );
+                if(mv == "ERR") { res.send({ status: "ERR", msg: "failed to create user on marzban" }); return; }
+
+                const plainSubUrl = "https://" + get_sub_url() + "/sub/" + uidv2(10);
+                let cryptoSubUrl = null;
+                try { cryptoSubUrl = await generate_happ_crypto_link(plainSubUrl); } catch(e){}
+
+                await update_user(user_obj.id,{
+                    corresponding_panel_id: targetPanel.id,
+                    corresponding_panel: targetPanel.panel_url,
+                    expire: user_obj.expire,
+                    data_limit: 0,
+                    ip_limit: 1,
+                    real_subscription_url: (mv.subscription_url.startsWith("/")?targetPanel.panel_url:"") + mv.subscription_url,
+                    links: mv.links,
+                    xray_subscription_url: mv.xray_subscription_url || "",
+                    subscription_url: plainSubUrl,
+                    subscription_url_crypto: cryptoSubUrl || plainSubUrl,
+                    happ_hwids: [],
+                    is_amnezia_migrated: true
+                });
+
+                await delete_vpn(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
+
+                const account = await token_to_account(access_token);
+                await insert_to_logs(
+                    account.id,
+                    "MIGRATE_AMN_TO_MZ",
+                    `migrated user !${user_obj.username} from AMN panel !${panel_obj.panel_name} to MZ panel !${targetPanel.panel_name} with expire kept and zero data limit`,
+                    access_token
+                );
+
+                res.send("DONE");
+                return;
+            } catch(e) {
+                res.send({ status: "ERR", msg: "migration failed" });
+                return;
+            }
+        }
+
         // تلاش برای revoke روی مرزبان (اگر در این نسخه/نوع پنل پشتیبانی نشود فقط هشدار لاگ می‌شود)
         try {
             var result = await revoke_marzban_subscription(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
