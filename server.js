@@ -1809,8 +1809,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             }
             catch(err)
             {
-                // درصورت خطا، برای سازگاری قدیمی ریدایرکت می‌کنیم
-                res.redirect(user_obj[0].real_subscription_url);
+                // درصورت خطا، به‌جای ریدایرکت به مرزبان، خطای محلی برمی‌گردانیم
+                res.status(502).send("UPSTREAM_SUBSCRIPTION_ERROR");
             }
         }
         else
