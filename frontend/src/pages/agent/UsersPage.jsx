@@ -59,6 +59,7 @@ const UsersPage = () => {
     const [amneziaFilter, setAmneziaFilter] = useState(false)
     const [showVerifyUnlock, setShowVerifyUnlock] = useState(false)
     const [unlockMode, setUnlockMode] = useState(false)
+    const [unlockAction, setUnlockAction] = useState("UNLOCK")
 
     const agentInfo = JSON.parse(sessionStorage.getItem("agent"))
 
@@ -153,7 +154,8 @@ const UsersPage = () => {
         setShowVerifyReset(true) 
     }
 
-    const handleUnlockUser = () => {
+    const handleUnlockUser = (id, mode) => {
+        setUnlockAction(mode || "UNLOCK")
         setShowVerifyUnlock(true)
     }
     
@@ -199,7 +201,8 @@ const UsersPage = () => {
         setUnlockMode(true)
         username = selectedUser.username
         const access_token = sessionStorage.getItem("access_token")
-        var req_res = await axios.post("/unlock_user", { access_token, username })
+        const mode = unlockAction === "MIGRATE_TO_MARZBAN" ? "MIGRATE_TO_MARZBAN" : undefined
+        var req_res = await axios.post("/unlock_user", { access_token, username, mode })
         if (req_res.data.status === "ERR") {
             setError_msg(req_res.data.msg)
             setHasError(true)
