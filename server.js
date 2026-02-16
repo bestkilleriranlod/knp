@@ -1763,11 +1763,11 @@ app.get(/^\/sub\/.+/,async (req,res) =>
         {
             try 
             {
-                // واکشی محتوای سابسکریپشن واقعی
                 const upstream = await axios.get(user_obj[0].real_subscription_url, { timeout: 10000 });
                 let body = typeof upstream.data === "string" ? upstream.data : "";
 
                 const username = user_obj[0].username;
+                const profileTitle = String(username || "").slice(0, 25);
                 const upload = 0;
                 const download = user_obj[0].used_traffic || 0;
                 const total = user_obj[0].data_limit || 0;
@@ -1789,15 +1789,23 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                     announce = process.env.HAPP_ANNOUNCE || "";
                 }
 
-                // هدرهای موردنیاز Happ
-                res.set('profile-title', username);
+                const userinfoStr = `upload=${upload}; download=${download}; total=${total}; expire=${expire}`;
+
+                res.set('profile-title', profileTitle);
                 res.set('profile-update-interval', '1');
-                res.set('subscription-userinfo', `upload=${upload}; download=${download}; total=${total}; expire=${expire}`);
+                res.set('subscription-userinfo', userinfoStr);
                 if(supportUrl) res.set('support-url', supportUrl);
                 if(announce) res.set('announce', announce);
 
+                let prefixLines = [];
+                if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
+                if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
+                if(announce) prefixLines.push(`#announce: ${announce}`);
+                if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
+                const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
+
                 res.set('content-type','text/plain; charset=utf-8');
-                res.send(body);
+                res.send(responseBody);
             }
             catch(err)
             {
