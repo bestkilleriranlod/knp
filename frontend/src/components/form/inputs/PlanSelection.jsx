@@ -8,16 +8,16 @@ import styles from './PlanSelection.module.css'
  * @param {function} onSelectPlan - Function called when a plan is selected
  * @param {object} selectedPlan - Currently selected plan
  * @param {number} availableData - Available data allocation for the agent
+ * @param {number} amneziaCoefficient - Coefficient for Amnezia/unlimited deduction
  */
-const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData }) => {
+const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData, amneziaCoefficient }) => {
   const [customGB, setCustomGB] = useState('15')
-  // AMNEZIA_COEFFICIENT constant from server
-  const AMNEZIA_COEFFICIENT = 2.3333; // Same value as in server.js
+  const AMNEZIA_COEFFICIENT = amneziaCoefficient || 6.6666;
   
   // Function to calculate and round up cost
   const calculateCost = (days) => {
     const exactCost = days * AMNEZIA_COEFFICIENT;
-    return Math.ceil(exactCost); // Round up to nearest integer
+    return Math.ceil(exactCost);
   };
 
   // Amnezia plans
