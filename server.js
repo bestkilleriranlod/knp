@@ -1322,14 +1322,10 @@ app.post("/unlock_user", async (req, res) => {
             try {
                 const panels = await get_panels();
 
-                let targetPanel = null;
-                if (user_obj.data_limit == 0) {
-                    targetPanel = panels.find(p => p.panel_type == "MZ" && p.panel_country == "unlimited1");
-                } else {
-                    targetPanel = panels.find(p => p.panel_type == "MZ" && p.panel_country == user_obj.country);
-                }
+                // برای مهاجرت از همه پنل‌های AMN، همیشه به پنل Marzban با country = "unlimited1" منتقل می‌کنیم
+                const targetPanel = panels.find(p => p.panel_type == "MZ" && p.panel_country == "unlimited1");
 
-                if(!targetPanel) { res.send({ status: "ERR", msg: "no marzban panel for this country" }); return; }
+                if(!targetPanel) { res.send({ status: "ERR", msg: "no marzban unlimited panel configured" }); return; }
 
                 const now = Math.floor(Date.now()/1000);
                 const remainingDays = Math.max(1, Math.floor((user_obj.expire - now)/86400));
