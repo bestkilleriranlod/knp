@@ -52,6 +52,21 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
 
     const access_token = sessionStorage.getItem("access_token")
 
+    const getPanelType = () => {
+        if (!item) return "MZ"
+
+        if (item.data_limit === 0) return "AMN_UNLIMITED"
+        
+        if (item.corresponding_panel_id == 948263502 || 
+            item.corresponding_panel_id == 855340348 || 
+            item.corresponding_panel_id == 952780616 ||
+            (item.country && item.country.includes("Amnezia")))
+            return "AMN"
+        return "MZ"
+    }
+    
+    const panel_type = getPanelType()
+
     useEffect(() => {
         if (!showForm) {
             setIsMoreOptionClicked(false)
@@ -71,13 +86,9 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                 setFlowValue({ label: item.inbounds.vless.flow, value: item.inbounds.vless.flow })
             }
 
-            // تشخیص نوع پنل از روی شناسه پنل یا کشور
-            // console.log("Panel ID:", item.corresponding_panel_id)
-            // console.log("Panel Type:", panel_type)
-            
             if (panel_type === "AMN" || panel_type === "AMN_UNLIMITED") {
                 setExpireInputType("plan_selection")
-                                    // Set Amnezia days based on current user's days
+                // Set Amnezia days based on current user's days
                 if (item.expire) {
                     const days = timeStampToDay(item.expire)
                     // Select closest value to 30, 60, or 90
@@ -86,10 +97,11 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                     if (days > 75) closestDays = 90;
                     
                     // محاسبه هزینه براساس AMNEZIA_COEFFICIENT و رند کردن به بالا
-                    const AMNEZIA_COEFFICIENT = 6.6666; // مقدار یکسان با سرور
+                    const agent = JSON.parse(sessionStorage.getItem("agent")) || {};
+                    const AMNEZIA_COEFFICIENT = agent.amnezia_coefficient || 6.6666;
                     const calculateCost = (days) => {
                         const exactCost = days * AMNEZIA_COEFFICIENT;
-                        return Math.ceil(exactCost); // رند به بالا
+                        return Math.ceil(exactCost);
                     };
                     
                     // Set default plan based on number of days
@@ -256,21 +268,6 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             pendingText: "Editing..."
         }]),
     ]
-
-    const getPanelType = () => {
-        if (!item) return "MZ";
-
-        if (item.data_limit === 0) return "AMN_UNLIMITED";
-        
-        if (item.corresponding_panel_id == 948263502 || 
-            item.corresponding_panel_id == 855340348 || 
-            item.corresponding_panel_id == 952780616 ||
-            (item.country && item.country.includes("Amnezia")))
-            return "AMN";
-        return "MZ";
-    }
-    
-    const panel_type = getPanelType()
 
     const b2gb = (bytes) => {
         return (bytes / (2 ** 10) ** 3).toFixed(2)
