@@ -1746,72 +1746,69 @@ app.get(/^\/sub\/.+/,async (req,res) =>
         }
         catch(e){}
 
-        // برای پنل‌های مرزبان (MZ) به‌جای ریدایرکت، پاسخ سازگار با Happ برگردانده می‌شود
+        // برای پنل‌های مرزبان (MZ)، پاسخ سازگار با Happ از روی لینک‌های ذخیره‌شده برمی‌گردانده می‌شود
         if(user_obj[0].real_subscription_url.startsWith("http"))
         {
-            try 
+            const linksArr = Array.isArray(user_obj[0].links) ? user_obj[0].links : [];
+            const body = linksArr.join("\n");
+            if(!body)
             {
-                const upstream = await axios.get(user_obj[0].real_subscription_url, { timeout: 10000 });
-                let body = typeof upstream.data === "string" ? upstream.data : "";
+                res.redirect(user_obj[0].real_subscription_url);
+                return;
+            }
 
-                const username = user_obj[0].username;
-                const profileTitle = String(username || "").slice(0, 25);
-                const upload = 0;
-                const download = user_obj[0].used_traffic || 0;
-                const total = user_obj[0].data_limit || 0;
-                const expire = user_obj[0].expire || 0;
+            const username = user_obj[0].username;
+            const profileTitle = String(username || "").slice(0, 25);
+            const upload = 0;
+            const download = user_obj[0].used_traffic || 0;
+            const total = user_obj[0].data_limit || 0;
+            const expire = user_obj[0].expire || 0;
 
-                // خواندن support-url از حساب نماینده (درصورت نبود، خالی)
-                let supportUrl = "";
+            // خواندن support-url از حساب نماینده (درصورت نبود، خالی)
+            let supportUrl = "";
+            try {
+                const agentAcc = await get_account(user_obj[0].agent_id);
+                supportUrl = agentAcc?.support_url || "";
+            } catch(e){}
+
+            let announce = "";
+            try {
+                const adminDoc = await (await accounts_clct()).findOne(
+                    { is_admin: 1, global_announce: { $exists: true } },
+                    { projection: { global_announce: 1 } }
+                );
+                if(adminDoc && adminDoc.global_announce) announce = adminDoc.global_announce;
+            } catch(e) {
+            }
+            if(!announce) {
                 try {
-                    const agentAcc = await get_account(user_obj[0].agent_id);
-                    supportUrl = agentAcc?.support_url || "";
-                } catch(e){}
-
-                let announce = "";
-                try {
-                    const adminDoc = await (await accounts_clct()).findOne(
-                        { is_admin: 1, global_announce: { $exists: true } },
-                        { projection: { global_announce: 1 } }
-                    );
-                    if(adminDoc && adminDoc.global_announce) announce = adminDoc.global_announce;
+                    announce = await (await redis_client()).get("HAPP_ANNOUNCE");
+                    if(!announce) announce = process.env.HAPP_ANNOUNCE || "";
                 } catch(e) {
+                    announce = process.env.HAPP_ANNOUNCE || "";
                 }
-                if(!announce) {
-                    try {
-                        announce = await (await redis_client()).get("HAPP_ANNOUNCE");
-                        if(!announce) announce = process.env.HAPP_ANNOUNCE || "";
-                    } catch(e) {
-                        announce = process.env.HAPP_ANNOUNCE || "";
-                    }
-                }
-
-                const userinfoStr = `upload=${upload}; download=${download}; total=${total}; expire=${expire}`;
-
-                res.set('profile-title', profileTitle);
-                res.set('profile-update-interval', '1');
-                res.set('subscription-userinfo', userinfoStr);
-                res.set('profile-web-page-url', 'https://google.com');
-                if(supportUrl) res.set('support-url', supportUrl);
-                if(announce) res.set('announce', announce);
-
-                let prefixLines = [];
-                if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
-                prefixLines.push(`#profile-update-interval: 1`);
-                prefixLines.push(`#profile-web-page-url: https://google.com`);
-                if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
-                if(announce) prefixLines.push(`#announce: ${announce}`);
-                if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
-                const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
-
-                res.set('content-type','text/plain; charset=utf-8');
-                res.send(responseBody);
             }
-            catch(err)
-            {
-                // درصورت خطا، به‌جای ریدایرکت به مرزبان، خطای محلی برمی‌گردانیم
-                res.status(502).send("UPSTREAM_SUBSCRIPTION_ERROR");
-            }
+
+            const userinfoStr = `upload=${upload}; download=${download}; total=${total}; expire=${expire}`;
+
+            res.set('profile-title', profileTitle);
+            res.set('profile-update-interval', '1');
+            res.set('subscription-userinfo', userinfoStr);
+            res.set('profile-web-page-url', 'https://google.com');
+            if(supportUrl) res.set('support-url', supportUrl);
+            if(announce) res.set('announce', announce);
+
+            let prefixLines = [];
+            if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
+            prefixLines.push(`#profile-update-interval: 1`);
+            prefixLines.push(`#profile-web-page-url: https://google.com`);
+            if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
+            if(announce) prefixLines.push(`#announce: ${announce}`);
+            if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
+            const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
+
+            res.set('content-type','text/plain; charset=utf-8');
+            res.send(responseBody);
         }
         else
         {
