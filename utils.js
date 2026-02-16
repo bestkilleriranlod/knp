@@ -204,10 +204,11 @@ const make_vpn = async (link, username, password, vpn_name, data_limit, expire, 
             "proxies": proxy_obj,
             "inbounds": inbounds,
             "expire": expire,
-            "data_limit": data_limit,
             "data_limit_reset_strategy": "no_reset",
             "ip_limit": ip_limit,
         };
+
+        if (data_limit && data_limit > 0) req_obj.data_limit = data_limit;
 
         var res = await axios.post(link + "/api/user", req_obj, { headers });
         return res.data;
