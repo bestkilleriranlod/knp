@@ -319,7 +319,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     const secondaryButtons = [
         ...(panel_type === "AMN" ? [] : [{ icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item?.username) }]),
         ...(panel_type === "MZ" && (item?.data_limit || 0) > 0 ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item?.id) }] : []),
-        ...(panel_type === "AMN" ? [{ icon: <RefreshIcon />, type: "button", label: "Move to Marzban", className: "ghosted", onClick: () => onUnlockItem(item?.id, "MIGRATE_TO_MARZBAN") }] : []),
+        ...(panel_type === "AMN" && !isUserExpired() ? [{ icon: <RefreshIcon />, type: "button", label: "Move to Marzban", className: "ghosted", onClick: () => onUnlockItem(item?.id, "MIGRATE_TO_MARZBAN") }] : []),
         ...(!isUserExpired() && panel_type !== "AMN" ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item?.id, item?.status) }] : []),
     ]
 
