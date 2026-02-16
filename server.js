@@ -868,6 +868,8 @@ app.post("/edit_panel", async (req, res) => {
     else if (panel_info == "ERR") res.send({ status: "ERR", msg: "Failed to connect to panel" });
 
     else {
+        const newDefaultIpLimit = default_ip_limit ? parseInt(default_ip_limit) : old_panel_obj.default_ip_limit || 1;
+
         await update_panel(panel_id, {
             panel_name,
             panel_username,
@@ -875,8 +877,16 @@ app.post("/edit_panel", async (req, res) => {
             panel_url,
             panel_user_max_count: parseInt(panel_user_max_count),
             panel_traffic: format_number(panel_traffic),
-            ...(default_ip_limit ? { default_ip_limit: parseInt(default_ip_limit) } : {})
+            default_ip_limit: newDefaultIpLimit
         });
+
+        // بروزرسانی ip_limit تمام یوزرهای این پنل به مقدار جدید
+        try {
+            await (await users_clct()).updateMany(
+                { corresponding_panel_id: panel_id },
+                { $set: { ip_limit: newDefaultIpLimit } }
+            );
+        } catch(e){}
 
         if(old_panel_obj.panel_url != panel_url)
         {
