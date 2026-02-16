@@ -1749,9 +1749,9 @@ app.get(/^\/sub\/.+/,async (req,res) =>
         // برای پنل‌های مرزبان (MZ) به‌جای ریدایرکت، پاسخ سازگار با Happ برگردانده می‌شود
         if(user_obj[0].real_subscription_url.startsWith("http"))
         {
+            let body = "";
             try 
             {
-                let body = "";
                 try {
                     const linksArr = Array.isArray(user_obj[0].links) ? user_obj[0].links : [];
                     if(linksArr.length) body = linksArr.join("\n");
@@ -1806,15 +1806,24 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
                 if(announce) prefixLines.push(`#announce: ${announce}`);
                 if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
-                const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
+                const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + (body || "");
 
                 res.set('content-type','text/plain; charset=utf-8');
                 res.send(responseBody);
             }
             catch(err)
             {
-                // درصورت خطا، به‌جای ریدایرکت به مرزبان، خطای محلی برمی‌گردانیم
-                res.status(502).send("UPSTREAM_SUBSCRIPTION_ERROR");
+                // درصورت خطا، به‌جای برگرداندن 502 همیشه پاسخ متنی ساده برمی‌گردانیم
+                res.set('content-type','text/plain; charset=utf-8');
+                const safeBody = body || "";
+                if(safeBody)
+                {
+                    res.send(safeBody);
+                }
+                else
+                {
+                    res.send("#subscription-error: FAILED_TO_BUILD_SUBSCRIPTION");
+                }
             }
         }
         else
