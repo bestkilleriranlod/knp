@@ -1312,9 +1312,15 @@ app.post("/unlock_user", async (req, res) => {
     else if (!corresponding_agent.country.split(",").includes(panel_obj.panel_country)) res.send({ status: "ERR", msg: "country access denied" })
     else 
     {  
-        // Revoke subscription on Marzban side (rotates UUID and subscription URL)
-        var result = await revoke_marzban_subscription(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
-        if (result == "ERR") {res.send({ status: "ERR", msg: "failed to revoke on marzban" });return;}
+        // تلاش برای revoke روی مرزبان (اگر در این نسخه/نوع پنل پشتیبانی نشود فقط هشدار لاگ می‌شود)
+        try {
+            var result = await revoke_marzban_subscription(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username);
+            if (result == "ERR") {
+                try { console.log("WARN: failed to revoke subscription on marzban for user", user_obj.username); } catch(e){}
+            }
+        } catch(e) {
+            try { console.log("WARN: revoke_marzban_subscription threw error for user", user_obj.username, e?.message || e); } catch(_) {}
+        }
 
         // Refresh real subscription URL and links from Marzban
         update_user_links_bg(panel_obj.panel_url, panel_obj.panel_username, panel_obj.panel_password, user_obj.username, user_obj.id);
