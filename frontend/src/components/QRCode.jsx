@@ -14,18 +14,6 @@ import "./QRCode.css"
 import Button from './Button'
 
 const QRCode = ({ onClose, showQRCode, QRCodeLinks, subscriptionLink }) => {
-    const [currentIndex, setCurrentIndex] = useState(0);
-
-    const handleNext = () => {
-        const nextIndex = (currentIndex + 1) % QRCodeLinks.length;
-        setCurrentIndex(nextIndex);
-    };
-
-    const handlePrevious = () => {
-        const previousIndex = (currentIndex - 1 + QRCodeLinks.length) % QRCodeLinks.length;
-        setCurrentIndex(previousIndex);
-    };
-
     return (
         <div className="qr-code">
             <AnimatePresence>
@@ -72,28 +60,6 @@ const QRCode = ({ onClose, showQRCode, QRCodeLinks, subscriptionLink }) => {
                                 Subscribe Link
                                 </div>
                             
-                            </div>
-                            <div className='qr-code-svg-div-container' style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                                <div className='links__slider'>
-                                    <div className='qr-code__links'>
-                                        <motion.div
-                                            className="inner"
-                                            animate={{ transform: `translateX(-${currentIndex * 300 + currentIndex * 16}px)` }}
-                                            transition={{ duration: .3 }}
-                                        >
-                                            {QRCodeLinks.map((QRCodeLink, index) => {
-                                                return (
-                                                    <QRCodeSVG key={index} value={QRCodeLink} size={300} className='qr-code-svg-div' />
-                                                )
-                                            })}
-                                        </motion.div>
-                                    </div>
-                                </div>
-                                <div class="qrcode_navigation_handler" >
-                                <Button className="outlined arrow-left" onClick={handlePrevious}><ArrowLeftIcon /></Button>
-                                {currentIndex + 1} / {QRCodeLinks.length}
-                                <Button className="outlined arrow-right" onClick={handleNext}><ArrowRightIcon /></Button>
-                                </div>
                             </div>
                         </main>
                     </Modal>
