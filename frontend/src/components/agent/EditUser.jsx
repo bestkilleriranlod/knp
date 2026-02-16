@@ -75,7 +75,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             // console.log("Panel ID:", item.corresponding_panel_id)
             // console.log("Panel Type:", panel_type)
             
-            if (panel_type === "AMN") {
+            if (panel_type === "AMN" || panel_type === "AMN_UNLIMITED") {
                 setExpireInputType("plan_selection")
                                     // Set Amnezia days based on current user's days
                 if (item.expire) {
@@ -185,14 +185,13 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
 
     const formFields = [
         { label: "Username", type: "text", id: "username", name: "username", disabled: true },
-        // حذف فیلدهای Data Limit، Days To Expire و IP Limit و استفاده از انتخاب پلن به جای آنها
         { label: "Country", type: "multi-select2", id: "country", name: "country", onChange: setCountry, disabled: true },
         { label: "Description", type: "text", id: "desc", name: "desc" },
     ]
 
     const primaryButtons = [
         { label: "Cancel", className: "outlined", onClick: onClose },
-        {
+        ...(panel_type === "AMN" ? [] : [{
             label: "Renew User", className: "primary", onClick: () => {
                             if (!selectedPlan) {
                 setError_msg("Please select a plan")
@@ -207,7 +206,7 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                     setSelectedProtocols(Object.keys(item.inbounds))
                 } else {
                     // Set default protocols based on panel type
-                    if (panel_type === "AMN") {
+                    if (panel_type === "AMN" || panel_type === "AMN_UNLIMITED") {
                         setSelectedProtocols(["amnezia"]) // Default protocol for AMN
                     } else {
                         // For V2Ray, set default protocols
@@ -255,13 +254,14 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
             },
             disabled: editMode,
             pendingText: "Editing..."
-        },
+        }]),
     ]
 
     const getPanelType = () => {
         if (!item) return "MZ";
+
+        if (item.data_limit === 0) return "AMN_UNLIMITED";
         
-        // تشخیص نوع پنل از روی شناسه پنل یا کشور
         if (item.corresponding_panel_id == 948263502 || 
             item.corresponding_panel_id == 855340348 || 
             item.corresponding_panel_id == 952780616 ||
@@ -318,12 +318,9 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
     }
     
     const secondaryButtons = [
-        { icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item?.username) },
-        // فقط دکمه Unlock Account برای اکانت‌های مرزبان نمایش داده شود
-        ...(panel_type === "MZ" ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item?.id) }] : []),
-        // دکمه انتقال از Amnezia به مرزبان فقط برای اکانت‌های AMN نمایش داده شود
+        ...(panel_type === "AMN" ? [] : [{ icon: <DeleteIcon />, type: "button", label: "Delete", className: "ghosted", onClick: (e) => onDeleteItem(e, item?.username) }]),
+        ...(panel_type === "MZ" && (item?.data_limit || 0) > 0 ? [{ icon: <LockIcon />, type: "button", label: "Unlock Account", className: "ghosted", onClick: () => onUnlockItem(item?.id) }] : []),
         ...(panel_type === "AMN" ? [{ icon: <RefreshIcon />, type: "button", label: "Move to Marzban", className: "ghosted", onClick: () => onUnlockItem(item?.id, "MIGRATE_TO_MARZBAN") }] : []),
-        // نمایش دکمه Power فقط در صورتی که کاربر منقضی یا محدود نشده باشد
         ...(!isUserExpired() ? [{ icon: <PowerIcon />, type: "switch", label: "Power", className: "ghosted", onClick: (e) => onPowerItem(e, item?.id, item?.status) }] : []),
     ]
 
@@ -521,7 +518,8 @@ const EditUser = ({ onClose, showForm, onDeleteItem, item, onEditItem, onPowerIt
                                     panelType={panel_type} 
                                     onSelectPlan={setSelectedPlan} 
                                     selectedPlan={selectedPlan}
-                                    availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0} // موجودی قابل اختصاص عامل
+                                    availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0}
+                                    amneziaCoefficient={JSON.parse(sessionStorage.getItem("agent"))?.amnezia_coefficient}
                                 />
                             </div>
 
