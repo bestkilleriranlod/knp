@@ -1372,6 +1372,7 @@ app.post("/unlock_user", async (req, res) => {
                 await update_user(user_obj.id,{
                     corresponding_panel_id: targetPanel.id,
                     corresponding_panel: targetPanel.panel_url,
+                    country: targetPanel.panel_country,
                     expire: user_obj.expire,
                     data_limit: 0,
                     ip_limit: 1,
