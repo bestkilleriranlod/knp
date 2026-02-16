@@ -1791,19 +1791,26 @@ app.get(/^\/sub\/.+/,async (req,res) =>
 
             const userinfoStr = `upload=${upload}; download=${download}; total=${total}; expire=${expire}`;
 
+            let announceHeader = "";
+            if(announce) {
+                const raw = String(announce);
+                const base64 = Buffer.from(raw, "utf8").toString("base64");
+                announceHeader = "base64:" + base64;
+            }
+
             res.set('profile-title', profileTitle);
             res.set('profile-update-interval', '1');
             res.set('subscription-userinfo', userinfoStr);
             res.set('profile-web-page-url', 'https://google.com');
             if(supportUrl) res.set('support-url', supportUrl);
-            if(announce) res.set('announce', announce);
+            if(announceHeader) res.set('announce', announceHeader);
 
             let prefixLines = [];
             if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
             prefixLines.push(`#profile-update-interval: 1`);
             prefixLines.push(`#profile-web-page-url: https://google.com`);
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
-            if(announce) prefixLines.push(`#announce: ${announce}`);
+            if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
             if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
             const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
 
