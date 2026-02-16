@@ -14,7 +14,8 @@ const EditPanel = ({ onClose, showForm, onDeleteItem, item, onPowerItem, onEditI
         { label: "Panel Url", type: "text", id: "panel_url", name: "panel_url" },
         { label: "Capacity", type: "number", id: "panel_user_max_count", name: "capacity" },
         { label: "Traffic", type: "number", id: "panel_traffic", name: "traffic" },
-        { label: "Country", type: "text", id: "panel_country", name: "country", disabled: true }
+        { label: "Country", type: "text", id: "panel_country", name: "country", disabled: true },
+        { label: "Default IP Limit", type: "number", id: "default_ip_limit", name: "default_ip_limit" }
     ]
 
     const primaryButtons = [
@@ -28,7 +29,8 @@ const EditPanel = ({ onClose, showForm, onDeleteItem, item, onPowerItem, onEditI
                 document.getElementById("panel_url").value,
                 document.getElementById("panel_user_max_count").value,
                 document.getElementById("panel_traffic").value,
-                document.getElementById("panel_country").value
+                document.getElementById("panel_country").value,
+                document.getElementById("default_ip_limit").value
             ),
             disabled: editMode,
             pendingText: "Editing..."
