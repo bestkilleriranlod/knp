@@ -46,6 +46,7 @@ const {
     reset_marzban_user,
     unlock_marzban_user,
     revoke_marzban_subscription,
+    get_marzban_user,
     generate_happ_crypto_link,
     delete_folder_content,
     enable_panel,
@@ -1886,11 +1887,27 @@ app.get(/^\/sub\/.+/,async (req,res) =>
         }
         catch(e){}
 
-        // برای پنل‌های مرزبان (MZ)، پاسخ سازگار با Happ از روی لینک‌های ذخیره‌شده برمی‌گردانده می‌شود
+        // برای پنل‌های مرزبان (MZ)، پاسخ سازگار با Happ بر اساس آخرین لینک‌ها
         if(user_obj[0].real_subscription_url.startsWith("http"))
         {
-            const linksArr = Array.isArray(user_obj[0].links) ? user_obj[0].links : [];
-            const body = linksArr.join("\n");
+            let linksArr = Array.isArray(user_obj[0].links) ? user_obj[0].links : [];
+            try {
+                // تلاش برای دریافت آخرین وضعیت از مرزبان تا تغییر نام/برچسب کانفیگ‌ها فوراً بازتاب پیدا کند
+                const p = await get_panel(user_obj[0].corresponding_panel_id);
+                const complete = await get_marzban_user(p.panel_url, p.panel_username, p.panel_password, user_obj[0].username);
+                if (complete && Array.isArray(complete.links) && complete.links.length) {
+                    linksArr = complete.links;
+                    // ذخیره در DB برای استفاده‌های بعدی
+                    await update_user(user_obj[0].id, {
+                        links: complete.links,
+                        real_subscription_url: (complete.subscription_url && complete.subscription_url.startsWith("/") ? p.panel_url : "") + (complete.subscription_url || user_obj[0].real_subscription_url),
+                        xray_subscription_url: complete.xray_subscription_url || user_obj[0].xray_subscription_url || ""
+                    });
+                }
+            } catch(e) {
+                // در صورت خطا از لینک‌های ذخیره‌شده استفاده می‌کنیم
+            }
+            const body = (linksArr || []).join("\n");
             if(!body)
             {
                 res.redirect(user_obj[0].real_subscription_url);
