@@ -1979,6 +1979,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('subscription-userinfo', userinfoStr);
             res.set('profile-web-page-url', 'https://google.com');
             res.set('notification-subs-expire', '1');
+            res.set('ping-result', 'icon');
             if(supportUrl) res.set('support-url', supportUrl);
             if(announceHeader) res.set('announce', announceHeader);
             // الزام به فعال بودن HWID در اپ Happ
@@ -1990,6 +1991,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             prefixLines.push(`#profile-update-interval: 1`);
             prefixLines.push(`#profile-web-page-url: https://google.com`);
             prefixLines.push(`#notification-subs-expire: 1`);
+            prefixLines.push(`#ping-result: icon`);
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
             // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
