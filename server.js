@@ -1870,6 +1870,12 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             const hwid = req.headers['happ-device-id'] || req.headers['x-hwid'] || req.headers['device-id'] || req.query.hwid;
             const u = user_obj[0];
             const limit = parseInt(u.ip_limit || 0);
+            // اگر محدودیت دستگاه فعال است اما HWID ارسال نشده باشد، دسترسی را می‌بندیم
+            if(limit > 0 && !hwid)
+            {
+                res.status(403).send("HWID is required for this subscription. Please enable HWID in the app settings.");
+                return;
+            }
             if(hwid && limit > 0)
             {
                 const current = Array.isArray(u.happ_hwids) ? u.happ_hwids : [];
@@ -1962,7 +1968,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             if(supportUrl) res.set('support-url', supportUrl);
             if(announceHeader) res.set('announce', announceHeader);
             // الزام به فعال بودن HWID در اپ Happ
-            res.set('subscription-always-hwid-enable', '1');
+            res.set('subscription-always-hwid-enable', 'true');
 
             let prefixLines = [];
             if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
@@ -1971,7 +1977,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
             // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
-            prefixLines.push(`#subscription-always-hwid-enable: 1`);
+            prefixLines.push(`#subscription-always-hwid-enable: true`);
             if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
             const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
 
