@@ -110,11 +110,6 @@ async function auth_middleware(req, res, next) {
 
 // --- ENDPOINTS --- //
 
-app.get("/ping", async (req, res) => 
-{
-    res.send("OK");
-});
-
 app.post("/ping", async (req, res) => 
 {
     res.send("OK");
@@ -1979,8 +1974,6 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 announceHeader = "base64:" + base64;
             }
 
-            const happCheckUrl = 'https://status.irtunir.com/ping';
-
             res.set('profile-title', profileTitle);
             res.set('profile-update-interval', '1');
             res.set('subscription-userinfo', userinfoStr);
@@ -1988,7 +1981,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('notification-subs-expire', '1');
             res.set('ping-result', 'icon');
             res.set('ping-type', 'proxy');
-            res.set('check-url-via-proxy', happCheckUrl);
+            res.set('check-url-via-proxy', 'https://www.gstatic.com/generate_204');
+            res.set('hide-settings', '1');
             if(supportUrl) res.set('support-url', supportUrl);
             if(announceHeader) res.set('announce', announceHeader);
             // الزام به فعال بودن HWID در اپ Happ
@@ -2002,7 +1996,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             prefixLines.push(`#notification-subs-expire: 1`);
             prefixLines.push(`#ping-result: icon`);
             prefixLines.push(`#ping-type proxy`);
-            prefixLines.push(`#check-url-via-proxy: ${happCheckUrl}`);
+            prefixLines.push(`#check-url-via-proxy: https://www.gstatic.com/generate_204`);
+            prefixLines.push(`#hide-settings: 1`);
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
             // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
