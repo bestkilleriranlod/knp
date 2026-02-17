@@ -1913,8 +1913,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             } catch(e) {
                 // در صورت خطا از لینک‌های ذخیره‌شده استفاده می‌کنیم
             }
-            const serverDescB64 = Buffer.from("Fast", "utf8").toString("base64");
-            linksArr = (linksArr || []).map(link => {
+            linksArr = (linksArr || []).map((link, index) => {
                 if(typeof link !== "string") return link;
                 if(link.includes("serverDescription=")) return link;
                 const hashIndex = link.indexOf("#");
@@ -1922,6 +1921,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 const prefix = link.slice(0, hashIndex);
                 const suffix = link.slice(hashIndex + 1);
                 if(suffix.includes("serverDescription=")) return link;
+                const desc = `سرور ${index + 1}`;
+                const serverDescB64 = Buffer.from(desc, "utf8").toString("base64");
                 const sep = suffix.includes("?") ? "&" : "?";
                 return prefix + "#" + suffix + sep + "serverDescription=" + serverDescB64;
             });
@@ -1977,6 +1978,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('profile-update-interval', '1');
             res.set('subscription-userinfo', userinfoStr);
             res.set('profile-web-page-url', 'https://google.com');
+            res.set('notification-subs-expire', '1');
             if(supportUrl) res.set('support-url', supportUrl);
             if(announceHeader) res.set('announce', announceHeader);
             // الزام به فعال بودن HWID در اپ Happ
@@ -1987,6 +1989,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
             prefixLines.push(`#profile-update-interval: 1`);
             prefixLines.push(`#profile-web-page-url: https://google.com`);
+            prefixLines.push(`#notification-subs-expire: 1`);
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
             // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
