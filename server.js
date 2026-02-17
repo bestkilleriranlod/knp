@@ -1961,6 +1961,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('profile-web-page-url', 'https://google.com');
             if(supportUrl) res.set('support-url', supportUrl);
             if(announceHeader) res.set('announce', announceHeader);
+            // الزام به فعال بودن HWID در اپ Happ
+            res.set('subscription-always-hwid-enable', '1');
 
             let prefixLines = [];
             if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
@@ -1968,6 +1970,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             prefixLines.push(`#profile-web-page-url: https://google.com`);
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
+            // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
+            prefixLines.push(`#subscription-always-hwid-enable: 1`);
             if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
             const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
 
