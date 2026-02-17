@@ -1969,6 +1969,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             if(announceHeader) res.set('announce', announceHeader);
             // الزام به فعال بودن HWID در اپ Happ
             res.set('subscription-always-hwid-enable', 'true');
+            res.set('providerid', 'yCUZsPnH');
 
             let prefixLines = [];
             if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
@@ -1978,6 +1979,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
             // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
             prefixLines.push(`#subscription-always-hwid-enable: true`);
+            prefixLines.push(`#providerid yCUZsPnH`);
             if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
             const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
 
