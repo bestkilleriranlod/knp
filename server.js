@@ -1913,24 +1913,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             } catch(e) {
                 // در صورت خطا از لینک‌های ذخیره‌شده استفاده می‌کنیم
             }
-            let body = (linksArr || []).join("\n");
-            try {
-                const fastDesc = "RmFzdA==";
-                const lines = body.split("\n").map((rawLine) => {
-                    const line = String(rawLine || "");
-                    if (!line.trim()) return line;
-                    if (line.includes("serverDescription=")) return line;
-                    const hashIndex = line.indexOf("#");
-                    if (hashIndex === -1) {
-                        return line + "#Fast?serverDescription=" + fastDesc;
-                    }
-                    if (line.includes("?")) {
-                        return line + "&serverDescription=" + fastDesc;
-                    }
-                    return line + "?serverDescription=" + fastDesc;
-                });
-                body = lines.join("\n");
-            } catch(e) {}
+            const body = (linksArr || []).join("\n");
             if(!body)
             {
                 res.redirect(user_obj[0].real_subscription_url);
