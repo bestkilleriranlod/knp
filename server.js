@@ -1913,6 +1913,27 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             } catch(e) {
                 // در صورت خطا از لینک‌های ذخیره‌شده استفاده می‌کنیم
             }
+            let serverDescB64 = "";
+            try {
+                const agentAcc = await get_account(user_obj[0].agent_id);
+                const rawDesc = String(agentAcc?.name || "").slice(0, 30) || "VPN";
+                serverDescB64 = Buffer.from(rawDesc, "utf8").toString("base64");
+            } catch(e) {}
+            if(!serverDescB64) {
+                const rawDesc = "VPN";
+                serverDescB64 = Buffer.from(rawDesc, "utf8").toString("base64");
+            }
+            linksArr = (linksArr || []).map(link => {
+                if(typeof link !== "string") return link;
+                if(link.includes("serverDescription=")) return link;
+                const hashIndex = link.indexOf("#");
+                if(hashIndex === -1) return link;
+                const prefix = link.slice(0, hashIndex);
+                const suffix = link.slice(hashIndex + 1);
+                if(suffix.includes("serverDescription=")) return link;
+                const sep = suffix.includes("?") ? "&" : "?";
+                return prefix + "#" + suffix + sep + "serverDescription=" + serverDescB64;
+            });
             const body = (linksArr || []).join("\n");
             if(!body)
             {
