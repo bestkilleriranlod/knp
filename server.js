@@ -1873,18 +1873,6 @@ app.get("/confirm_payment", async(req,res) =>
 
 app.get(/^\/sub\/.+/,async (req,res) =>
 {
-    try
-    {
-        const ua = String(req.headers['user-agent'] || '');
-        const isHapp = /^Happ\//i.test(ua);
-        if(!isHapp)
-        {
-            res.status(403).send("This subscription can only be used in the Happ app.");
-            return;
-        }
-    }
-    catch(e){}
-
     var sub_id = req.url.split("/")[2];
     var user_obj = await (await users_clct()).find({subscription_url:{$regex:sub_id}}).toArray();
     if(user_obj.length == 0) res.send(not_found_page_html);
