@@ -132,6 +132,9 @@ app.post("/get_users", async (req, res) => {
     await reload_agents();
     var agent_id = (await token_to_account(access_token)).id
     var obj_arr = await get_users(agent_id);
+    var panels_all = await get_panels();
+    var panel_map = {};
+    for (let p of panels_all) panel_map[p.id] = p;
     if(process.env.RELEASE == "V" || process.env.RELEASE == "AHWAZGSM" || process.env.RELEASE == "REZA") obj_arr = obj_arr.map(x => {x.subscription_url = x.real_subscription_url;return x;});
     if(process.env.RELEASE == "ALI") obj_arr = obj_arr.map(x => 
     {
@@ -143,6 +146,17 @@ app.post("/get_users", async (req, res) => {
     
     if(search_filter) obj_arr = obj_arr.filter(x => x.username.toLowerCase().includes(search_filter.toLowerCase()));
     
+    var now_ts = Math.floor(Date.now() / 1000);
+    for(let u of obj_arr)
+    {
+        var p = panel_map[u.corresponding_panel_id];
+        if(p && p.panel_type == "AMN")
+        {
+            var ex = u.expire || 0;
+            if(ex > 0 && ex < now_ts && u.status != "disabled") u.status = "expired";
+        }
+    }
+
     if(status_filter) obj_arr = obj_arr.filter(x => x.status == status_filter.toLowerCase());
     
     if(panel_type)
@@ -1859,6 +1873,18 @@ app.get("/confirm_payment", async(req,res) =>
 
 app.get(/^\/sub\/.+/,async (req,res) =>
 {
+    try
+    {
+        const ua = String(req.headers['user-agent'] || '');
+        const isHapp = /^Happ\//i.test(ua);
+        if(!isHapp)
+        {
+            res.status(403).send("This subscription can only be used in the Happ app.");
+            return;
+        }
+    }
+    catch(e){}
+
     var sub_id = req.url.split("/")[2];
     var user_obj = await (await users_clct()).find({subscription_url:{$regex:sub_id}}).toArray();
     if(user_obj.length == 0) res.send(not_found_page_html);
