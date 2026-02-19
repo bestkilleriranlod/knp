@@ -1927,18 +1927,54 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             } catch(e) {
                 // در صورت خطا از لینک‌های ذخیره‌شده استفاده می‌کنیم
             }
-            linksArr = (linksArr || []).map((link, index) => {
-                if(typeof link !== "string") return link;
-                if(link.includes("serverDescription=")) return link;
+
+            // رندوم‌سازی ترتیب سرورهایی که عنوان آن‌ها شامل Fast است
+            try {
+                const fast = [];
+                const others = [];
+                for (const link of linksArr || []) {
+                    if (typeof link !== "string") {
+                        others.push(link);
+                        continue;
+                    }
+                    const hashIndex = link.indexOf("#");
+                    if (hashIndex === -1) {
+                        others.push(link);
+                        continue;
+                    }
+                    const afterHash = link.slice(hashIndex + 1);
+                    const title = afterHash.split("?")[0] || "";
+                    const titlePlain = title.normalize("NFKD");
+                    if (/fast/i.test(titlePlain) || /𝐅𝐚𝐬𝐭/i.test(titlePlain)) {
+                        fast.push(link);
+                    } else {
+                        others.push(link);
+                    }
+                }
+                for (let i = fast.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    const tmp = fast[i];
+                    fast[i] = fast[j];
+                    fast[j] = tmp;
+                }
+                linksArr = fast.concat(others);
+            } catch(e) {}
+
+            linksArr = (linksArr || []).map((link) => {
+                if (typeof link !== "string") return link;
                 const hashIndex = link.indexOf("#");
-                if(hashIndex === -1) return link;
+                if (hashIndex === -1) return link;
                 const prefix = link.slice(0, hashIndex);
-                const suffix = link.slice(hashIndex + 1);
-                if(suffix.includes("serverDescription=")) return link;
-                const desc = `سرور ${index + 1}`;
-                const serverDescB64 = Buffer.from(desc, "utf8").toString("base64");
-                const sep = suffix.includes("?") ? "&" : "?";
-                return prefix + "#" + suffix + sep + "serverDescription=" + serverDescB64;
+                let suffix = link.slice(hashIndex + 1);
+                const parts = suffix.split("?");
+                const namePart = parts[0] || "";
+                const queryPart = parts[1] || "";
+                if (!queryPart) return link;
+                const filtered = queryPart
+                    .split("&")
+                    .filter(p => p && !/^serverDescription=/i.test(p));
+                const newSuffix = filtered.length ? namePart + "?" + filtered.join("&") : namePart;
+                return prefix + "#" + newSuffix;
             });
             const body = (linksArr || []).join("\n");
             if(!body)
@@ -1993,6 +2029,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('subscription-userinfo', userinfoStr);
             res.set('profile-web-page-url', 'https://google.com');
             res.set('notification-subs-expire', '1');
+            res.set('subscription-auto-update-open-enable', '1');
             res.set('ping-result', 'icon');
             res.set('ping-type', 'proxy');
             res.set('check-url-via-proxy', 'https://www.gstatic.com/generate_204');
@@ -2008,6 +2045,7 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             prefixLines.push(`#profile-update-interval: 1`);
             prefixLines.push(`#profile-web-page-url: https://google.com`);
             prefixLines.push(`#notification-subs-expire: 1`);
+            prefixLines.push(`#subscription-auto-update-open-enable: 1`);
             prefixLines.push(`#ping-result: icon`);
             prefixLines.push(`#ping-type proxy`);
             prefixLines.push(`#check-url-via-proxy: https://www.gstatic.com/generate_204`);
