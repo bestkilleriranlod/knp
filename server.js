@@ -2016,6 +2016,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             }
 
             const userinfoStr = `upload=${upload}; download=${download}; total=${total}; expire=${expire}`;
+            const resolveDomain = 'https://cloudflare-dns.com/dns-query';
+            const resolveIp = '1.1.1.1';
 
             let announceHeader = "";
             if(announce) {
@@ -2029,6 +2031,9 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('subscription-userinfo', userinfoStr);
             res.set('profile-web-page-url', 'https://google.com');
             res.set('notification-subs-expire', '1');
+            res.set('server-address-resolve-enable', '1');
+            res.set('server-address-resolve-dns-domain', resolveDomain);
+            res.set('server-address-resolve-dns-ip', resolveIp);
             res.set('subscription-auto-update-open-enable', '1');
             res.set('ping-result', 'icon');
             res.set('ping-type', 'proxy');
@@ -2045,6 +2050,9 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             prefixLines.push(`#profile-update-interval: 1`);
             prefixLines.push(`#profile-web-page-url: https://google.com`);
             prefixLines.push(`#notification-subs-expire: 1`);
+            prefixLines.push(`#server-address-resolve-enable: 1`);
+            prefixLines.push(`#server-address-resolve-dns-domain: ${resolveDomain}`);
+            prefixLines.push(`#server-address-resolve-dns-ip: ${resolveIp}`);
             prefixLines.push(`#subscription-auto-update-open-enable: 1`);
             prefixLines.push(`#ping-result: icon`);
             prefixLines.push(`#ping-type proxy`);
