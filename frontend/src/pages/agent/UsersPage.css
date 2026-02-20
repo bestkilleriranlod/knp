@@ -40,6 +40,25 @@
     margin-top: 1rem;
 }
 
+.happ-download-icons {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.happ-download-button {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+}
+
+.happ-download-link {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    word-break: break-all;
+    text-align: center;
+}
+
 @keyframes rotate {
     0% {
         transform: rotate(0deg);

@@ -28,6 +28,12 @@ import { ReactComponent as ExpiredIcon } from '../../assets/svg/expired.svg'
 import { ReactComponent as DisabledIcon } from '../../assets/svg/disabled.svg'
 import { ReactComponent as AnonymIcon } from '../../assets/svg/anonym.svg'
 import { ReactComponent as FilterIcon } from '../../assets/svg/filter.svg'
+import Modal from '../../components/Modal'
+import LeadingIcon from '../../components/LeadingIcon'
+import { AnimatePresence } from 'framer-motion'
+import { ReactComponent as QRCodeIcon } from '../../assets/svg/qrcode.svg'
+import { ReactComponent as XMarkIcon } from '../../assets/svg/x-mark.svg'
+import { QRCodeSVG } from 'qrcode.react';
 
 
 const UsersPage = () => {
@@ -60,13 +66,33 @@ const UsersPage = () => {
     const [showVerifyUnlock, setShowVerifyUnlock] = useState(false)
     const [unlockMode, setUnlockMode] = useState(false)
     const [unlockAction, setUnlockAction] = useState("UNLOCK")
+    const [showHappDownloadModal, setShowHappDownloadModal] = useState(false)
+    const [happDownloadLink, setHappDownloadLink] = useState("")
+    const [happDownloadTitle, setHappDownloadTitle] = useState("")
 
     const agentInfo = JSON.parse(sessionStorage.getItem("agent"))
 
 
-    const get_panel_type = () =>
-    {
-        return amneziaFilter == true ? "AMN":null
+    const get_panel_type = () => {
+        return amneziaFilter == true ? "AMN" : null
+    }
+
+    const HAPP_LINKS = {
+        iosMac: "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215",
+        android: "https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk",
+        windows: "https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe",
+        androidTv: "https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk",
+        appleTv: "https://apps.apple.com/us/app/happ-proxy-utility-for-tv/id6748297274"
+    }
+
+    const handleOpenHappDownload = (title, link) => {
+        setHappDownloadTitle(title)
+        setHappDownloadLink(link)
+        setShowHappDownloadModal(true)
+    }
+
+    const handleCloseHappDownload = () => {
+        setShowHappDownloadModal(false)
     }
 
     const fetchUsers = async (resetCurrentPage) => {
@@ -435,6 +461,38 @@ const UsersPage = () => {
                 <div className="flex gap-2 items-center">
                     <Search value={searchedUsers} onChange={setSearchedUsers} />
                     <AmneziaFilter enabled={amneziaFilter} setEnabled={setAmneziaFilter} />
+                    <div className="happ-download-icons">
+                        <Button
+                            className="outlined happ-download-button"
+                            onClick={() => handleOpenHappDownload("Happ برای iOS / macOS", HAPP_LINKS.iosMac)}
+                        >
+                            iOS / macOS
+                        </Button>
+                        <Button
+                            className="outlined happ-download-button"
+                            onClick={() => handleOpenHappDownload("Happ برای Android", HAPP_LINKS.android)}
+                        >
+                            Android
+                        </Button>
+                        <Button
+                            className="outlined happ-download-button"
+                            onClick={() => handleOpenHappDownload("Happ برای Windows", HAPP_LINKS.windows)}
+                        >
+                            Windows
+                        </Button>
+                        <Button
+                            className="outlined happ-download-button"
+                            onClick={() => handleOpenHappDownload("Happ برای Android TV", HAPP_LINKS.androidTv)}
+                        >
+                            Android TV
+                        </Button>
+                        <Button
+                            className="outlined happ-download-button"
+                            onClick={() => handleOpenHappDownload("Happ برای Apple TV", HAPP_LINKS.appleTv)}
+                        >
+                            Apple TV
+                        </Button>
+                    </div>
                     <Dropdown options={statusOptions} value={selectedStatus} onChange={handleSelectStatus} overlap={true} showChevron={false} />
                 </div>
                 <span style={{ display: "flex", gap: "0.5rem" }} className='items-center'>
@@ -476,6 +534,30 @@ const UsersPage = () => {
                     handlePageChange={handlePageChange}
                 />
             </div>
+
+            <AnimatePresence>
+                {showHappDownloadModal && (
+                    <Modal onClose={handleCloseHappDownload} className={"qr-code__modal"}>
+                        <header className="modal__header">
+                            <LeadingIcon>
+                                <QRCodeIcon />
+                            </LeadingIcon>
+                            <h1 className='modal__title'>{happDownloadTitle}</h1>
+                            <div className="close-icon" onClick={handleCloseHappDownload}>
+                                <XMarkIcon />
+                            </div>
+                        </header>
+                        <main className='qr-code__main' style={{ display: "flex", justifyContent: "center" }}>
+                            <div className='qr-code-svg-div-container' style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                <QRCodeSVG value={happDownloadLink} size={300} className='qr-code-svg-div' />
+                                <a href={happDownloadLink} target="_blank" rel="noreferrer" className="happ-download-link">
+                                    {happDownloadLink}
+                                </a>
+                            </div>
+                        </main>
+                    </Modal>
+                )}
+            </AnimatePresence>
 
             <EditUser
                 onClose={handleCloseEditUser}
