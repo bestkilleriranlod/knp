@@ -464,31 +464,31 @@ const UsersPage = () => {
                     <div className="happ-download-icons">
                         <Button
                             className="outlined happ-download-button"
-                            onClick={() => handleOpenHappDownload("Happ برای iOS / macOS", HAPP_LINKS.iosMac)}
+                            onClick={() => handleOpenHappDownload("Happ For iOS / macOS", HAPP_LINKS.iosMac)}
                         >
                             iOS / macOS
                         </Button>
                         <Button
                             className="outlined happ-download-button"
-                            onClick={() => handleOpenHappDownload("Happ برای Android", HAPP_LINKS.android)}
+                            onClick={() => handleOpenHappDownload("Happ For Android", HAPP_LINKS.android)}
                         >
                             Android
                         </Button>
                         <Button
                             className="outlined happ-download-button"
-                            onClick={() => handleOpenHappDownload("Happ برای Windows", HAPP_LINKS.windows)}
+                            onClick={() => handleOpenHappDownload("Happ For Windows", HAPP_LINKS.windows)}
                         >
                             Windows
                         </Button>
                         <Button
                             className="outlined happ-download-button"
-                            onClick={() => handleOpenHappDownload("Happ برای Android TV", HAPP_LINKS.androidTv)}
+                            onClick={() => handleOpenHappDownload("Happ For Android TV", HAPP_LINKS.androidTv)}
                         >
                             Android TV
                         </Button>
                         <Button
                             className="outlined happ-download-button"
-                            onClick={() => handleOpenHappDownload("Happ برای Apple TV", HAPP_LINKS.appleTv)}
+                            onClick={() => handleOpenHappDownload("Happ For Apple TV", HAPP_LINKS.appleTv)}
                         >
                             Apple TV
                         </Button>
