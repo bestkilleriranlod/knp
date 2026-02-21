@@ -81,8 +81,6 @@ const UsersPage = () => {
         iosMac: "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215",
         android: "https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk",
         windows: "https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe",
-        androidTv: "https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk",
-        appleTv: "https://apps.apple.com/us/app/happ-proxy-utility-for-tv/id6748297274"
     }
 
     const handleOpenHappDownload = (title, link) => {
@@ -479,18 +477,6 @@ const UsersPage = () => {
                             onClick={() => handleOpenHappDownload("Happ For Windows", HAPP_LINKS.windows)}
                         >
                             Windows
-                        </Button>
-                        <Button
-                            className="outlined happ-download-button"
-                            onClick={() => handleOpenHappDownload("Happ For Android TV", HAPP_LINKS.androidTv)}
-                        >
-                            Android TV
-                        </Button>
-                        <Button
-                            className="outlined happ-download-button"
-                            onClick={() => handleOpenHappDownload("Happ For Apple TV", HAPP_LINKS.appleTv)}
-                        >
-                            Apple TV
                         </Button>
                     </div>
                     <Dropdown options={statusOptions} value={selectedStatus} onChange={handleSelectStatus} overlap={true} showChevron={false} />
