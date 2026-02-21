@@ -1928,54 +1928,6 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 // در صورت خطا از لینک‌های ذخیره‌شده استفاده می‌کنیم
             }
 
-            // رندوم‌سازی ترتیب سرورهایی که عنوان آن‌ها شامل Fast است
-            try {
-                const fast = [];
-                const others = [];
-                for (const link of linksArr || []) {
-                    if (typeof link !== "string") {
-                        others.push(link);
-                        continue;
-                    }
-                    const hashIndex = link.indexOf("#");
-                    if (hashIndex === -1) {
-                        others.push(link);
-                        continue;
-                    }
-                    const afterHash = link.slice(hashIndex + 1);
-                    const title = afterHash.split("?")[0] || "";
-                    const titlePlain = title.normalize("NFKD");
-                    if (/fast/i.test(titlePlain) || /𝐅𝐚𝐬𝐭/i.test(titlePlain)) {
-                        fast.push(link);
-                    } else {
-                        others.push(link);
-                    }
-                }
-                for (let i = fast.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    const tmp = fast[i];
-                    fast[i] = fast[j];
-                    fast[j] = tmp;
-                }
-                linksArr = fast.concat(others);
-            } catch(e) {}
-
-            linksArr = (linksArr || []).map((link) => {
-                if (typeof link !== "string") return link;
-                const hashIndex = link.indexOf("#");
-                if (hashIndex === -1) return link;
-                const prefix = link.slice(0, hashIndex);
-                let suffix = link.slice(hashIndex + 1);
-                const parts = suffix.split("?");
-                const namePart = parts[0] || "";
-                const queryPart = parts[1] || "";
-                if (!queryPart) return link;
-                const filtered = queryPart
-                    .split("&")
-                    .filter(p => p && !/^serverDescription=/i.test(p));
-                const newSuffix = filtered.length ? namePart + "?" + filtered.join("&") : namePart;
-                return prefix + "#" + newSuffix;
-            });
             const body = (linksArr || []).join("\n");
             if(!body)
             {
