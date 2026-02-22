@@ -1878,13 +1878,12 @@ app.get(/^\/sub\/.+/,async (req,res) =>
     if(user_obj.length == 0) res.send(not_found_page_html);
     else
     {
-        // اعمال محدودیت دستگاه بر اساس HWID و ip_limit
+        // اعمال محدودیت دستگاه بر اساس HWID و ip_limit (مدل HWID Links)
         try
         {
             const hwid = req.headers['happ-device-id'] || req.headers['x-hwid'] || req.headers['device-id'] || req.query.hwid;
             const u = user_obj[0];
             const limit = parseInt(u.ip_limit || 0);
-            // اگر محدودیت دستگاه فعال است اما HWID ارسال نشده باشد، دسترسی را می‌بندیم
             if(limit > 0 && !hwid)
             {
                 res.status(403).send("HWID is required for this subscription. Please enable HWID in the app settings.");
@@ -1968,8 +1967,6 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             }
 
             const userinfoStr = `upload=${upload}; download=${download}; total=${total}; expire=${expire}`;
-            const resolveDomain = 'https://cloudflare-dns.com/dns-query';
-            const resolveIp = '1.1.1.1';
 
             let announceHeader = "";
             if(announce) {
@@ -1982,39 +1979,25 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('profile-update-interval', '1');
             res.set('subscription-userinfo', userinfoStr);
             res.set('profile-web-page-url', 'https://google.com');
+            res.set('providerid', 'yCUZsPnH');
             res.set('notification-subs-expire', '1');
-            res.set('server-address-resolve-enable', '1');
-            res.set('server-address-resolve-dns-domain', resolveDomain);
-            res.set('server-address-resolve-dns-ip', resolveIp);
-            res.set('subscription-auto-update-open-enable', '1');
-            res.set('ping-result', 'icon');
-            res.set('ping-type', 'proxy');
-            res.set('check-url-via-proxy', 'https://www.gstatic.com/generate_204');
             res.set('hide-settings', '1');
             if(supportUrl) res.set('support-url', supportUrl);
             if(announceHeader) res.set('announce', announceHeader);
             // الزام به فعال بودن HWID در اپ Happ
             res.set('subscription-always-hwid-enable', 'true');
-            res.set('providerid', 'yCUZsPnH');
 
             let prefixLines = [];
             if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
             prefixLines.push(`#profile-update-interval: 1`);
             prefixLines.push(`#profile-web-page-url: https://google.com`);
+            prefixLines.push(`#providerid yCUZsPnH`);
             prefixLines.push(`#notification-subs-expire: 1`);
-            prefixLines.push(`#server-address-resolve-enable: 1`);
-            prefixLines.push(`#server-address-resolve-dns-domain: ${resolveDomain}`);
-            prefixLines.push(`#server-address-resolve-dns-ip: ${resolveIp}`);
-            prefixLines.push(`#subscription-auto-update-open-enable: 1`);
-            prefixLines.push(`#ping-result: icon`);
-            prefixLines.push(`#ping-type proxy`);
-            prefixLines.push(`#check-url-via-proxy: https://www.gstatic.com/generate_204`);
             prefixLines.push(`#hide-settings: 1`);
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
             // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
             prefixLines.push(`#subscription-always-hwid-enable: true`);
-            prefixLines.push(`#providerid yCUZsPnH`);
             if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
             const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
 
