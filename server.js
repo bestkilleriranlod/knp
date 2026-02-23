@@ -1968,15 +1968,6 @@ app.get(/^\/sub\/.+/,async (req,res) =>
 
             const userinfoStr = `upload=${upload}; download=${download}; total=${total}; expire=${expire}`;
 
-            const tunnelConfig = {
-                stack: "gvisor",
-                auto_route: true,
-                strict_route: false,
-                mtu: 1400
-            };
-
-            const tunnelConfigJson = JSON.stringify(tunnelConfig);
-
             const routingProfile = {
                 Name: "Iran-Direct",
                 GlobalProxy: "true",
@@ -1986,13 +1977,13 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 DomesticDNSType: "DoH",
                 DomesticDNSDomain: "https://dns.google/dns-query",
                 DomesticDNSIP: "8.8.8.8",
-                Geoipurl: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat",
-                Geositeurl: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat",
+                Geoipurl: "https://github.com/v2fly/geoip/releases/latest/download/geoip.dat",
+                Geositeurl: "https://github.com/bootmortis/iran-hosted-domains/releases/latest/download/iran.dat",
                 DnsHosts: {
                     "cloudflare-dns.com": "1.1.1.1",
                     "dns.google": "8.8.8.8"
                 },
-                DirectSites: ["geosite:ir", "geosite:geolocation-ir"],
+                DirectSites: ["geosite:all"],
                 DirectIp: [
                     "geoip:ir",
                     "10.0.0.0/8",
@@ -2027,7 +2018,6 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('providerid', 'yCUZsPnH');
             res.set('notification-subs-expire', '1');
             res.set('hide-settings', '1');
-            res.set('custom-tunnel-config', tunnelConfigJson);
             res.set('routing', routingLink);
             if(supportUrl) res.set('support-url', supportUrl);
             if(announceHeader) res.set('announce', announceHeader);
@@ -2041,7 +2031,6 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             prefixLines.push(`#providerid yCUZsPnH`);
             prefixLines.push(`#notification-subs-expire: 1`);
             prefixLines.push(`#hide-settings: 1`);
-            prefixLines.push(`#custom-tunnel-config: ${tunnelConfigJson}`);
             prefixLines.push(routingLink);
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
