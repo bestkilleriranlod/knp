@@ -1968,6 +1968,51 @@ app.get(/^\/sub\/.+/,async (req,res) =>
 
             const userinfoStr = `upload=${upload}; download=${download}; total=${total}; expire=${expire}`;
 
+            const tunnelConfig = {
+                stack: "gvisor",
+                auto_route: true,
+                strict_route: false,
+                mtu: 1400
+            };
+
+            const tunnelConfigJson = JSON.stringify(tunnelConfig);
+
+            const routingProfile = {
+                Name: "Iran-Direct",
+                GlobalProxy: "true",
+                RemoteDNSType: "DoH",
+                RemoteDNSDomain: "https://cloudflare-dns.com/dns-query",
+                RemoteDNSIP: "1.1.1.1",
+                DomesticDNSType: "DoH",
+                DomesticDNSDomain: "https://dns.google/dns-query",
+                DomesticDNSIP: "8.8.8.8",
+                Geoipurl: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat",
+                Geositeurl: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat",
+                DnsHosts: {
+                    "cloudflare-dns.com": "1.1.1.1",
+                    "dns.google": "8.8.8.8"
+                },
+                DirectSites: ["geosite:ir", "geosite:geolocation-ir"],
+                DirectIp: [
+                    "geoip:ir",
+                    "10.0.0.0/8",
+                    "172.16.0.0/12",
+                    "192.168.0.0/16",
+                    "169.254.0.0/16",
+                    "224.0.0.0/4",
+                    "255.255.255.255"
+                ],
+                ProxySites: [],
+                ProxyIp: [],
+                BlockSites: [],
+                BlockIp: [],
+                DomainStrategy: "IPIfNonMatch",
+                FakeDNS: "false"
+            };
+
+            const routingProfileBase64 = Buffer.from(JSON.stringify(routingProfile), "utf8").toString("base64");
+            const routingLink = `happ://routing/onadd/${routingProfileBase64}`;
+
             let announceHeader = "";
             if(announce) {
                 const raw = String(announce);
@@ -1982,6 +2027,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('providerid', 'yCUZsPnH');
             res.set('notification-subs-expire', '1');
             res.set('hide-settings', '1');
+            res.set('custom-tunnel-config', tunnelConfigJson);
+            res.set('routing', routingLink);
             if(supportUrl) res.set('support-url', supportUrl);
             if(announceHeader) res.set('announce', announceHeader);
             // الزام به فعال بودن HWID در اپ Happ
@@ -1994,6 +2041,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             prefixLines.push(`#providerid yCUZsPnH`);
             prefixLines.push(`#notification-subs-expire: 1`);
             prefixLines.push(`#hide-settings: 1`);
+            prefixLines.push(`#custom-tunnel-config: ${tunnelConfigJson}`);
+            prefixLines.push(routingLink);
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
             // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
