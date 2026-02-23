@@ -1977,8 +1977,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 DomesticDNSType: "DoH",
                 DomesticDNSDomain: "https://dns.google/dns-query",
                 DomesticDNSIP: "8.8.8.8",
-                Geoipurl: "https://github.com/v2fly/geoip/releases/latest/download/geoip.dat",
-                Geositeurl: "https://github.com/bootmortis/iran-hosted-domains/releases/latest/download/iran.dat",
+                Geoipurl: "https://geo.irtunir.com/geoip.dat",
+                Geositeurl: "https://geo.irtunir.com/iran.dat",
                 DnsHosts: {
                     "cloudflare-dns.com": "1.1.1.1",
                     "dns.google": "8.8.8.8"
