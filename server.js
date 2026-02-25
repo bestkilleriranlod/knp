@@ -1115,8 +1115,12 @@ app.post("/edit_user", async (req, res) => {
             try {
                 const updatedUser = await get_user1(user_id);
                 let currentSub = updatedUser.subscription_url || "";
-                if(currentSub.startsWith("http")) {
-                    const newSub = "https://" + get_sub_url() + "/sub/" + uidv2(10);
+                
+                // اصلاح: فقط اگر لینک فعلی شامل دامین KNP نباشد، لینک جدید می‌سازیم
+                // تا از تغییر لینک کاربرانی که قبلاً لینک KNP دارند جلوگیری شود
+                const knpSubPart = get_sub_url() + "/sub/";
+                if(currentSub.startsWith("http") && !currentSub.includes(knpSubPart)) {
+                    const newSub = "https://" + knpSubPart + uidv2(10);
                     currentSub = newSub;
                     await update_user(user_id,{subscription_url:newSub});
                 }
