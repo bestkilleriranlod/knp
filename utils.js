@@ -128,6 +128,39 @@ const token_to_sub_account = async (token) =>
     return sub_account;
 }
 
+// --- GUARDCORE UTILS --- //
+
+const guardcore_create_subscription = async (link, token, username, data_limit, expire) => {
+    try {
+        const headers = { "Accept": "application/json", "Content-Type": "application/json", "X-API-Key": token };
+        const body = [{ username, limit_usage: data_limit, limit_expire: expire, service_ids: [1] }];
+        const res = await axios.post(link + "/api/subscriptions", body, { headers, timeout: 10000 });
+        const sub = res.data[0];
+        return { subscription_url: sub.link, links: [sub.link], xray_subscription_url: "" };
+    } catch (err) { console.log(err?.response?.data); return "ERR"; }
+}
+
+const guardcore_delete_subscription = async (link, token, username) => {
+    try {
+        await axios.delete(link + "/api/subscriptions/" + username, { headers: { "X-API-Key": token }, timeout: 10000 });
+        return "DONE";
+    } catch (err) { return "ERR"; }
+}
+
+const guardcore_action_subscription = async (link, token, username, action) => {
+    try {
+        await axios.post(link + "/api/subscriptions/" + username + "/" + action, {}, { headers: { "X-API-Key": token }, timeout: 10000 });
+        return "DONE";
+    } catch (err) { return "ERR"; }
+}
+
+const guardcore_edit_subscription = async (link, token, username, data_limit, expire) => {
+    try {
+        await axios.put(link + "/api/subscriptions/" + username, { limit_usage: data_limit, limit_expire: expire }, { headers: { "X-API-Key": token }, timeout: 10000 });
+        return "DONE";
+    } catch (err) { return "ERR"; }
+}
+
 // --- MARZBAN UTILS --- //
 
 const auth_marzban = async (link, username, password, cacheless=false) => {
@@ -166,6 +199,22 @@ const auth_marzban = async (link, username, password, cacheless=false) => {
 
 const get_panel_info = async (link, username, password) => {
     try {
+        if(link.includes("core.erfjab.com"))
+        {
+             try {
+                 await axios.get(link + "/api/subscriptions/count", { headers: { "X-API-Key": password }, timeout: 10000 });
+                 return {
+                    total_users: 0, 
+                    active_users: 0,
+                    panel_data_usage: 0,
+                    panel_inbounds: [],
+                    panel_type: "GC"
+                 };
+            } catch (e) {
+                console.log("GC Info Error", e.message);
+                return "ERR";
+            }
+        }
         var headers = await auth_marzban(link, username, password);
         if (headers == "ERR") return "ERR";
         var panel_info = (await axios.get(link + "/api/system", { headers, timeout: 10000 })).data;
@@ -192,6 +241,11 @@ const get_panel_info = async (link, username, password) => {
 
 const make_vpn = async (link, username, password, vpn_name, data_limit, expire, protocols, flow_status, inbounds, ip_limit) => {
     try {
+
+        if(link.includes("core.erfjab.com"))
+        {
+            return await guardcore_create_subscription(link, password, vpn_name, data_limit, expire);
+        }
 
         if(protocols.includes("panel_type")) protocols.splice(protocols.indexOf("panel_type"),1);
         
@@ -222,6 +276,10 @@ const make_vpn = async (link, username, password, vpn_name, data_limit, expire, 
 
 const delete_vpn = async (link, username, password, vpn_name) => {
     try {
+        if(link.includes("core.erfjab.com"))
+        {
+            return await guardcore_delete_subscription(link, password, vpn_name);
+        }
         var headers = await auth_marzban(link, username, password);
         if (headers == "ERR") return "ERR";
         var res = await axios.delete(link + "/api/user/" + vpn_name, { headers });
@@ -249,6 +307,10 @@ const delete_vpn_group = async (link, username, password, vpn_names) =>
 
 const disable_vpn = async (link, username, password, vpn_name) => {
     try {
+        if(link.includes("core.erfjab.com"))
+        {
+            return await guardcore_action_subscription(link, password, vpn_name, "disable");
+        }
         var headers = await auth_marzban(link, username, password);
         if (headers == "ERR") return "ERR";
         var res = await axios.put(link + "/api/user/" + vpn_name, { status: "disabled" }, { headers });
@@ -276,6 +338,10 @@ const disable_vpn_group = async (link, username, password, vpn_names) =>
 
 const enable_vpn = async (link, username, password, vpn_name) => {
     try {
+        if(link.includes("core.erfjab.com"))
+        {
+            return await guardcore_action_subscription(link, password, vpn_name, "enable");
+        }
         var headers = await auth_marzban(link, username, password);
         if (headers == "ERR") return "ERR";
         var res = await axios.put(link + "/api/user/" + vpn_name, { status: "active" }, { headers });
@@ -303,6 +369,10 @@ const enable_vpn_group = async (link, username, password, vpn_names) =>
 
 const edit_vpn = async (link, username, password, vpn_name, data_limit, expire, protocols, flow_status,is_changing_country,is_changing_protocols) => {
     try {
+        if(link.includes("core.erfjab.com"))
+        {
+            return await guardcore_edit_subscription(link, password, vpn_name, data_limit, expire);
+        }
         var headers = await auth_marzban(link, username, password);
         if (headers == "ERR") return "ERR";
 
