@@ -65,32 +65,8 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData, a
     }
   ]
 
-  // GC plans - 30 days only, 1.5x cost
-  const gcPlans = [
-    { 
-      days: 30, 
-      dataLimit: 15, 
-      cost: Math.ceil(15 * 1.5), 
-      label: `15 GB - 30 Days (${Math.ceil(15 * 1.5)} Units)`
-    },
-    { 
-      days: 30, 
-      dataLimit: 30, 
-      cost: Math.ceil(30 * 1.5), 
-      label: `30 GB - 30 Days (${Math.ceil(30 * 1.5)} Units)`
-    },
-    { 
-      days: 30, 
-      dataLimit: 60, 
-      cost: Math.ceil(60 * 1.5), 
-      label: `60 GB - 30 Days (${Math.ceil(60 * 1.5)} Units)`
-    }
-  ]
-
   // Select plan array based on panel type
-  let plans = v2rayPlans;
-  if (panelType === 'AMN') plans = amneziaPlan;
-  else if (panelType === 'GC') plans = gcPlans;
+  const plans = panelType === 'AMN' ? amneziaPlan : v2rayPlans
 
   // Check if plan is available based on account balance
   const isPlanAvailable = (plan) => {
@@ -116,7 +92,7 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData, a
                 {/* Concurrent users */}
                 <div className={styles['plan-detail']}>
                   <span className={styles['detail-label']}>Concurrent Users:</span>
-                  <span className={styles['detail-value']}>{panelType === 'AMN' ? '1' : (panelType === 'GC' ? '∞' : '2')}</span>
+                  <span className={styles['detail-value']}>{panelType === 'AMN' ? '1' : '2'}</span>
                 </div>
                 {/* Cost */}
                 <div className={styles['plan-detail']}>
@@ -136,16 +112,15 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData, a
         {panelType !== 'AMN' && (
           <motion.div
             key="custom"
-            className={`${styles['plan-item']} ${selectedPlan && selectedPlan.isCustom ? styles['selected'] : ''} ${availableData < (panelType === 'GC' ? Math.ceil(Math.max(15, (parseInt(customGB || '0', 10) || 0)) * 1.5) : Math.max(15, (parseInt(customGB || '0', 10) || 0))) ? styles['disabled'] : ''}`}
+            className={`${styles['plan-item']} ${selectedPlan && selectedPlan.isCustom ? styles['selected'] : ''} ${availableData < Math.max(15, (parseInt(customGB || '0', 10) || 0)) ? styles['disabled'] : ''}`}
             onClick={() => {
               const num = parseInt(customGB || '0', 10) || 0
               const gb = Math.max(15, num)
-              const cost = panelType === 'GC' ? Math.ceil(gb * 1.5) : gb
-              if (availableData >= cost) {
-                onSelectPlan({ days: 30, dataLimit: gb, cost: cost, isCustom: true, label: `Custom - ${gb} GB - 30 Days (${cost} Units)` })
+              if (availableData >= gb) {
+                onSelectPlan({ days: 30, dataLimit: gb, cost: gb, isCustom: true, label: `Custom - ${gb} GB - 30 Days (${gb} Units)` })
               }
             }}
-            whileHover={{ scale: availableData >= (panelType === 'GC' ? Math.ceil(Math.max(15, (parseInt(customGB || '0', 10) || 0)) * 1.5) : Math.max(15, (parseInt(customGB || '0', 10) || 0))) ? 1.02 : 1 }}
+            whileHover={{ scale: availableData >= Math.max(15, (parseInt(customGB || '0', 10) || 0)) ? 1.02 : 1 }}
             transition={{ duration: 0.2 }}
           >
             <div className={styles['plan-content']}>
@@ -165,16 +140,14 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData, a
                         setCustomGB(digits)
                         if (selectedPlan && selectedPlan.isCustom) {
                           const val = Math.max(15, (parseInt(digits || '0', 10) || 0))
-                          const cost = panelType === 'GC' ? Math.ceil(val * 1.5) : val
-                          onSelectPlan({ days: 30, dataLimit: val, cost: cost, isCustom: true, label: `Custom - ${val} GB - 30 Days (${cost} Units)` })
+                          onSelectPlan({ days: 30, dataLimit: val, cost: val, isCustom: true, label: `Custom - ${val} GB - 30 Days (${val} Units)` })
                         }
                       }}
                       onBlur={() => {
                         const val = Math.max(15, (parseInt(customGB || '0', 10) || 0))
                         setCustomGB(String(val))
                         if (selectedPlan && selectedPlan.isCustom) {
-                            const cost = panelType === 'GC' ? Math.ceil(val * 1.5) : val
-                            onSelectPlan({ days: 30, dataLimit: val, cost: cost, isCustom: true, label: `Custom - ${val} GB - 30 Days (${cost} Units)` })
+                          onSelectPlan({ days: 30, dataLimit: val, cost: val, isCustom: true, label: `Custom - ${val} GB - 30 Days (${val} Units)` })
                         }
                       }}
                       className={styles['custom-input']}
@@ -187,12 +160,12 @@ const PlanSelection = ({ panelType, onSelectPlan, selectedPlan, availableData, a
                         color: 'inherit'
                       }}
                     />
-                    <span className={styles['detail-value']} style={{ whiteSpace: 'nowrap' }}>{panelType === 'GC' ? Math.ceil(Math.max(15, (parseInt(customGB || '0', 10) || 0)) * 1.5) : Math.max(15, (parseInt(customGB || '0', 10) || 0))} Units</span>
+                    <span className={styles['detail-value']} style={{ whiteSpace: 'nowrap' }}>{Math.max(15, (parseInt(customGB || '0', 10) || 0))} Units</span>
                   </div>
                 </div>
               </div>
             </div>
-            {availableData < (panelType === 'GC' ? Math.ceil(Math.max(15, (parseInt(customGB || '0', 10) || 0)) * 1.5) : Math.max(15, (parseInt(customGB || '0', 10) || 0))) && (
+            {availableData < Math.max(15, (parseInt(customGB || '0', 10) || 0)) && (
               <div className={styles['unavailable-overlay']}>
                 <div className={styles['unavailable-text']}>Insufficient Balance</div>
               </div>
