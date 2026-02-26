@@ -8,7 +8,7 @@ import { ReactComponent as XMarkIcon } from '../assets/svg/x-mark.svg'
 import { ReactComponent as ArrowLeftIcon } from '../assets/svg/arrow-left.svg'
 import { ReactComponent as ArrowRightIcon } from '../assets/svg/arrow-right.svg'
 import { ReactComponent as DownloadIcon } from '../assets/svg/download.svg'
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { motion } from "framer-motion"
 import "./QRCode.css"
 import Button from './Button'
@@ -30,31 +30,20 @@ const QRCode = ({ onClose, showQRCode, QRCodeLinks, subscriptionLink }) => {
                         </header>
                         <main className='qr-code__main' style={{ display: "flex", justifyContent: "center" }}>
                             <div className='qr-code-svg-div-container' style={{ display: "flex", flexDirection: "column", alignItems: "center"}}>
-                                <QRCodeSVG value={subscriptionLink} size={300} className='qr-code-svg-div' />
+                                <QRCodeCanvas id="qr-gen" value={subscriptionLink} size={300} className='qr-code-svg-div' />
                                 <div className='download_sublink_btn_container' >
                                 <Button className="outlined" 
                                 
-                                onClick={async () => 
+                                onClick={() => 
                                 {
-                                    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=" + subscriptionLink;
-                                    
-                                    try 
-                                    {
-                                      const response = await fetch(qrUrl);
-                                      const blob = await response.blob();
-                                      const link = document.createElement("a");
-                                      link.href = URL.createObjectURL(blob);
-                                      link.download = "qr-code.png";
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                      URL.revokeObjectURL(link.href);
-                                    } 
-                                    
-                                    catch (error) 
-                                    {
-                                      console.error("Download failed", error);
-                                    }
+                                    const canvas = document.getElementById("qr-gen");
+                                    const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+                                    let downloadLink = document.createElement("a");
+                                    downloadLink.href = pngUrl;
+                                    downloadLink.download = "qr-code.png";
+                                    document.body.appendChild(downloadLink);
+                                    downloadLink.click();
+                                    document.body.removeChild(downloadLink);
                                   }}>
                                 <DownloadIcon /></Button>
                                 Subscribe Link
