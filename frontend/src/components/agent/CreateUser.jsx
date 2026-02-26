@@ -168,22 +168,6 @@ const CreateUser = ({ onClose, showForm }) => {
                 });
                 setAmneziaDays(30)
             }
-            else if(panelType === "GC")
-            {
-                setIsIpLimitDisabled(true)
-                setIsDataLimitDisabled(false)
-                setIpLimitValue("")
-                setDataLimitValue("")
-                setExpireInputType("plan_selection")
-                
-                // GC Default Plan
-                setSelectedPlan({
-                    days: 30,
-                    dataLimit: 30,
-                    cost: Math.ceil(30 * 1.5),
-                    label: `30 GB - 30 Days (${Math.ceil(30 * 1.5)} Units)`
-                });
-            }
             const updatedProtocols = protocols.map((protocol) => ({
                 name: protocol.name,
                 disabled: !availableProtocolsName.includes(protocol.name),
@@ -240,9 +224,7 @@ const CreateUser = ({ onClose, showForm }) => {
         // const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
         const desc = document.getElementById("desc").value
         // Use default IP limit values (field is hidden)
-        let ip_limit = 2; // Default for V2Ray
-        if (panelType === "AMN") ip_limit = 1;
-        else if (panelType === "GC") ip_limit = null; // Use panel default for GC
+        const ip_limit = panelType === "AMN" ? 1 : 2 // 1 for Amnezia, 2 for V2Ray
         
         // Since the protocols section is hidden, ensure protocols are set 
         // Make sure at least one protocol is selected
@@ -251,8 +233,6 @@ const CreateUser = ({ onClose, showForm }) => {
             // Set default protocols based on panel type
             if (panelType === "AMN") {
                 protocolsToUse = ["amnezia"]; // Default protocol for AMN
-            } else if (panelType === "GC") {
-                protocolsToUse = ["guard"]; // Default protocol for GC
             } else {
                 // For V2Ray, set default protocols
                 protocolsToUse = ["vmess", "vless", "trojan"];
