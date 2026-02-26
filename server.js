@@ -412,6 +412,7 @@ app.post("/create_panel", async (req, res) => {
             panel_data_usage: format_number(panel_info.panel_data_usage),
             active_users: panel_info.active_users,
             total_users: panel_info.total_users,
+            panel_inbounds: panel_info.panel_inbounds,
             panel_type:panel_info.panel_type,
             default_ip_limit: parseInt(default_ip_limit || 1),
         });
@@ -900,6 +901,10 @@ app.post("/edit_panel", async (req, res) => {
             panel_url,
             panel_user_max_count: parseInt(panel_user_max_count),
             panel_traffic: format_number(panel_traffic),
+            panel_data_usage: format_number(panel_info.panel_data_usage),
+            active_users: panel_info.active_users,
+            total_users: panel_info.total_users,
+            panel_inbounds: panel_info.panel_inbounds,
             default_ip_limit: newDefaultIpLimit
         });
 

@@ -199,7 +199,7 @@ const auth_marzban = async (link, username, password, cacheless=false) => {
 
 const get_panel_info = async (link, username, password) => {
     try {
-        if(link.includes("core.erfjab.com"))
+        if(link.includes("core.erfjab.com") || link.includes("core.erfanjab.com"))
         {
              try {
                  await axios.get(link + "/api/subscriptions/count", { headers: { "X-API-Key": password }, timeout: 10000 });
@@ -207,7 +207,9 @@ const get_panel_info = async (link, username, password) => {
                     total_users: 0, 
                     active_users: 0,
                     panel_data_usage: 0,
-                    panel_inbounds: [],
+                    panel_inbounds: {
+                        "guardcore": [{ tag: "gc-inbound", remarks: "GuardCore Default" }]
+                    },
                     panel_type: "GC"
                  };
             } catch (e) {
@@ -242,7 +244,7 @@ const get_panel_info = async (link, username, password) => {
 const make_vpn = async (link, username, password, vpn_name, data_limit, expire, protocols, flow_status, inbounds, ip_limit) => {
     try {
 
-        if(link.includes("core.erfjab.com"))
+        if(link.includes("core.erfjab.com") || link.includes("core.erfanjab.com"))
         {
             return await guardcore_create_subscription(link, password, vpn_name, data_limit, expire);
         }
@@ -276,7 +278,7 @@ const make_vpn = async (link, username, password, vpn_name, data_limit, expire, 
 
 const delete_vpn = async (link, username, password, vpn_name) => {
     try {
-        if(link.includes("core.erfjab.com"))
+        if(link.includes("core.erfjab.com") || link.includes("core.erfanjab.com"))
         {
             return await guardcore_delete_subscription(link, password, vpn_name);
         }
@@ -307,7 +309,7 @@ const delete_vpn_group = async (link, username, password, vpn_names) =>
 
 const disable_vpn = async (link, username, password, vpn_name) => {
     try {
-        if(link.includes("core.erfjab.com"))
+        if(link.includes("core.erfjab.com") || link.includes("core.erfanjab.com"))
         {
             return await guardcore_action_subscription(link, password, vpn_name, "disable");
         }
@@ -338,7 +340,7 @@ const disable_vpn_group = async (link, username, password, vpn_names) =>
 
 const enable_vpn = async (link, username, password, vpn_name) => {
     try {
-        if(link.includes("core.erfjab.com"))
+        if(link.includes("core.erfjab.com") || link.includes("core.erfanjab.com"))
         {
             return await guardcore_action_subscription(link, password, vpn_name, "enable");
         }
@@ -369,7 +371,7 @@ const enable_vpn_group = async (link, username, password, vpn_names) =>
 
 const edit_vpn = async (link, username, password, vpn_name, data_limit, expire, protocols, flow_status,is_changing_country,is_changing_protocols) => {
     try {
-        if(link.includes("core.erfjab.com"))
+        if(link.includes("core.erfjab.com") || link.includes("core.erfanjab.com"))
         {
             return await guardcore_edit_subscription(link, password, vpn_name, data_limit, expire);
         }
