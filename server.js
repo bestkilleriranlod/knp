@@ -444,7 +444,7 @@ app.post("/create_user", async (req, res) => {
 
         if(process.env.RELEASE == "ARMAN") flow_status = "xtls-rprx-vision";
 
-    if (!username || !expire || !data_limit || !country || protocols.length == 0) 
+    if (!username || !expire || !data_limit || !country || !ip_limit || protocols.length == 0) 
     {
         res.send({ status: "ERR", msg: "fill all of the inputs" })
         return;
@@ -547,7 +547,6 @@ app.post("/create_user", async (req, res) => {
             });
 
             if(selected_panel.panel_type == "MZ" && !isUnlimitedPanel) await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit) });
-            else if(selected_panel.panel_type == "GC") await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - data_limit * 1.5) });
             else if(selected_panel.panel_type == "AMN" || isUnlimitedPanel) await update_account(agent_id, { allocatable_data: format_number(corresponding_agent.allocatable_data - expire * AMNEZIA_COEFFICIENT)});
             
 
@@ -555,7 +554,7 @@ app.post("/create_user", async (req, res) => {
             const isUnlimitedPanelForLog = selected_panel.panel_type == "MZ" && selected_panel.panel_country === "unlimited1";
             const cost = (selected_panel.panel_type == "AMN" || isUnlimitedPanelForLog) ? 
                 Math.ceil(expire * AMNEZIA_COEFFICIENT) : 
-                (selected_panel.panel_type == "GC" ? data_limit * 1.5 : data_limit);
+                data_limit;
                 
             await insert_to_logs(
                 agent_id, 
