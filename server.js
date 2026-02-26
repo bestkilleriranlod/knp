@@ -47,6 +47,7 @@ const {
     unlock_marzban_user,
     revoke_marzban_subscription,
     get_marzban_user,
+
     generate_happ_crypto_link,
     delete_folder_content,
     enable_panel,
@@ -771,6 +772,8 @@ app.post("/enable_panel", async (req, res) => {
     await insert_to_logs(account.id, "ENABLE_PANEL", `enabled panel !${panel_obj.panel_name}`,access_token);
     res.send("DONE");
 });
+
+
 
 app.post("/enable_user", async (req, res) => {
     var { access_token, user_id } = req.body;
@@ -1936,6 +1939,8 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 // در صورت خطا از لینک‌های ذخیره‌شده استفاده می‌کنیم
             }
 
+
+
             const body = (linksArr || []).join("\n");
             if(!body)
             {
@@ -2031,7 +2036,11 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             if(supportUrl) res.set('support-url', supportUrl);
             if(announceHeader) res.set('announce', announceHeader);
             // الزام به فعال بودن HWID در اپ Happ
-            res.set('subscription-always-hwid-enable', 'true');
+            res.set('subscription-always-hwid-enable', '1');
+            // غیرفعال کردن قابلیت جمع شدن لیست سرورها (همیشه باز بودن لیست)
+            res.set('subscriptions-collapse', '0');
+            // فعال کردن آپدیت خودکار هنگام باز کردن اپ
+            res.set('subscription-auto-update-open-enable', '1');
 
             let prefixLines = [];
             if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
@@ -2044,7 +2053,9 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
             // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
-            prefixLines.push(`#subscription-always-hwid-enable: true`);
+            prefixLines.push(`#subscription-always-hwid-enable: 1`);
+            prefixLines.push(`#subscriptions-collapse: 0`);
+            prefixLines.push(`#subscription-auto-update-open-enable: 1`);
             if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
             const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
 
