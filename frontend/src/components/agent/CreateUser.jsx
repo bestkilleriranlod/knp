@@ -49,10 +49,10 @@ const CreateUser = ({ onClose, showForm }) => {
     const [selectedPlan, setSelectedPlan] = useState(null)
 
     const createUserOnServer = async (
-        username, data_limit, expire, country,desc,ip_limit
+        username, data_limit, expire, country,desc,ip_limit, protocolsList = null
     ) => {
         setCreateMode(true)
-        var protocols = selectedProtocols.filter(x => typeof x === "string")
+        var protocols = protocolsList || selectedProtocols.filter(x => typeof x === "string")
         var flow_status = flowValue.value;
         ip_limit = parseInt(ip_limit)
 
@@ -218,24 +218,26 @@ const CreateUser = ({ onClose, showForm }) => {
         const panelType = expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"
         const data_limit = panelType === "AMN" ? 10000 : selectedPlan.dataLimit
         const expire = selectedPlan.days
-        const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
+        // const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
         const desc = document.getElementById("desc").value
         // Use default IP limit values (field is hidden)
         const ip_limit = panelType === "AMN" ? 1 : 2 // 1 for Amnezia, 2 for V2Ray
         
         // Since the protocols section is hidden, ensure protocols are set 
         // Make sure at least one protocol is selected
-        if (selectedProtocols.length === 0) {
+        let protocolsToUse = [...selectedProtocols];
+        if (protocolsToUse.length === 0) {
             // Set default protocols based on panel type
             if (panelType === "AMN") {
-                setSelectedProtocols(["amnezia"]) // Default protocol for AMN
+                protocolsToUse = ["amnezia"]; // Default protocol for AMN
             } else {
                 // For V2Ray, set default protocols
-                setSelectedProtocols(["vmess", "vless", "trojan"])
+                protocolsToUse = ["vmess", "vless", "trojan"];
             }
+            setSelectedProtocols(protocolsToUse)
         }
         
-        createUserOnServer(username, data_limit, expire, country, desc, ip_limit)
+        createUserOnServer(username, data_limit, expire, country, desc, ip_limit, protocolsToUse)
     }
 
 
