@@ -47,6 +47,7 @@ const CreateUser = ({ onClose, showForm }) => {
     const [dataLimitValue, setDataLimitValue] = useState("")
     const [expireInputType, setExpireInputType] = useState("number")
     const [selectedPlan, setSelectedPlan] = useState(null)
+    const [currentPanelType, setCurrentPanelType] = useState("MZ")
 
     const createUserOnServer = async (
         username, data_limit, expire, country,desc,ip_limit, protocolsList = null
@@ -121,6 +122,8 @@ const CreateUser = ({ onClose, showForm }) => {
             const availableProtocolsName = Object.keys(panelInboundsObj);
             console.log("Available protocols:", availableProtocolsName);
             
+            setCurrentPanelType(panelType)
+
             if(panelType === "MZ" && !isUnlimitedPanel)
             {
                 setIsIpLimitDisabled(true)
@@ -164,6 +167,22 @@ const CreateUser = ({ onClose, showForm }) => {
                     label: `30 Days (${calculateCost(30)} Units)`
                 });
                 setAmneziaDays(30)
+            }
+            else if(panelType === "GC")
+            {
+                setIsIpLimitDisabled(true)
+                setIsDataLimitDisabled(false)
+                setIpLimitValue("")
+                setDataLimitValue("")
+                setExpireInputType("plan_selection")
+                
+                // GC Default Plan
+                setSelectedPlan({
+                    days: 30,
+                    dataLimit: 30,
+                    cost: Math.ceil(30 * 1.5),
+                    label: `30 GB - 30 Days (${Math.ceil(30 * 1.5)} Units)`
+                });
             }
             const updatedProtocols = protocols.map((protocol) => ({
                 name: protocol.name,
@@ -215,13 +234,15 @@ const CreateUser = ({ onClose, showForm }) => {
         
         // Use the state value instead of directly accessing the DOM element
         const username = usernameValue || document.getElementById("username").value // Fallback to DOM access if state is empty
-        const panelType = expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"
+        const panelType = currentPanelType
         const data_limit = panelType === "AMN" ? 10000 : selectedPlan.dataLimit
         const expire = selectedPlan.days
         // const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
         const desc = document.getElementById("desc").value
         // Use default IP limit values (field is hidden)
-        const ip_limit = panelType === "AMN" ? 1 : 2 // 1 for Amnezia, 2 for V2Ray
+        let ip_limit = 2; // Default for V2Ray
+        if (panelType === "AMN") ip_limit = 1;
+        else if (panelType === "GC") ip_limit = null; // Use panel default for GC
         
         // Since the protocols section is hidden, ensure protocols are set 
         // Make sure at least one protocol is selected
@@ -230,6 +251,8 @@ const CreateUser = ({ onClose, showForm }) => {
             // Set default protocols based on panel type
             if (panelType === "AMN") {
                 protocolsToUse = ["amnezia"]; // Default protocol for AMN
+            } else if (panelType === "GC") {
+                protocolsToUse = ["guard"]; // Default protocol for GC
             } else {
                 // For V2Ray, set default protocols
                 protocolsToUse = ["vmess", "vless", "trojan"];
@@ -405,7 +428,7 @@ const CreateUser = ({ onClose, showForm }) => {
                             {country && (
                                 <div className={styles['plan-section']}>
                                     <PlanSelection 
-                                        panelType={expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"} 
+                                        panelType={currentPanelType} 
                                         onSelectPlan={setSelectedPlan} 
                                         selectedPlan={selectedPlan}
                                         availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0}
