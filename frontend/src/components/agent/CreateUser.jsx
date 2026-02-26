@@ -47,13 +47,12 @@ const CreateUser = ({ onClose, showForm }) => {
     const [dataLimitValue, setDataLimitValue] = useState("")
     const [expireInputType, setExpireInputType] = useState("number")
     const [selectedPlan, setSelectedPlan] = useState(null)
-    const [currentPanelType, setCurrentPanelType] = useState("MZ")
 
     const createUserOnServer = async (
-        username, data_limit, expire, country,desc,ip_limit, protocolsList = null
+        username, data_limit, expire, country,desc,ip_limit
     ) => {
         setCreateMode(true)
-        var protocols = protocolsList || selectedProtocols.filter(x => typeof x === "string")
+        var protocols = selectedProtocols.filter(x => typeof x === "string")
         var flow_status = flowValue.value;
         ip_limit = parseInt(ip_limit)
 
@@ -122,8 +121,6 @@ const CreateUser = ({ onClose, showForm }) => {
             const availableProtocolsName = Object.keys(panelInboundsObj);
             console.log("Available protocols:", availableProtocolsName);
             
-            setCurrentPanelType(panelType)
-
             if(panelType === "MZ" && !isUnlimitedPanel)
             {
                 setIsIpLimitDisabled(true)
@@ -218,29 +215,27 @@ const CreateUser = ({ onClose, showForm }) => {
         
         // Use the state value instead of directly accessing the DOM element
         const username = usernameValue || document.getElementById("username").value // Fallback to DOM access if state is empty
-        const panelType = currentPanelType
+        const panelType = expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"
         const data_limit = panelType === "AMN" ? 10000 : selectedPlan.dataLimit
         const expire = selectedPlan.days
-        // const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
+        const country = document.querySelectorAll(".MuiSelect-nativeInput")[0].value
         const desc = document.getElementById("desc").value
         // Use default IP limit values (field is hidden)
         const ip_limit = panelType === "AMN" ? 1 : 2 // 1 for Amnezia, 2 for V2Ray
         
         // Since the protocols section is hidden, ensure protocols are set 
         // Make sure at least one protocol is selected
-        let protocolsToUse = [...selectedProtocols];
-        if (protocolsToUse.length === 0) {
+        if (selectedProtocols.length === 0) {
             // Set default protocols based on panel type
             if (panelType === "AMN") {
-                protocolsToUse = ["amnezia"]; // Default protocol for AMN
+                setSelectedProtocols(["amnezia"]) // Default protocol for AMN
             } else {
                 // For V2Ray, set default protocols
-                protocolsToUse = ["vmess", "vless", "trojan"];
+                setSelectedProtocols(["vmess", "vless", "trojan"])
             }
-            setSelectedProtocols(protocolsToUse)
         }
         
-        createUserOnServer(username, data_limit, expire, country, desc, ip_limit, protocolsToUse)
+        createUserOnServer(username, data_limit, expire, country, desc, ip_limit)
     }
 
 
@@ -408,7 +403,7 @@ const CreateUser = ({ onClose, showForm }) => {
                             {country && (
                                 <div className={styles['plan-section']}>
                                     <PlanSelection 
-                                        panelType={currentPanelType} 
+                                        panelType={expireInputType === "plan_selection" && dataLimitValue == 10000 ? "AMN" : "MZ"} 
                                         onSelectPlan={setSelectedPlan} 
                                         selectedPlan={selectedPlan}
                                         availableData={JSON.parse(sessionStorage.getItem("agent"))?.allocatable_data || 0}
