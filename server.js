@@ -2025,40 +2025,38 @@ app.get(/^\/sub\/.+/,async (req,res) =>
                 announceHeader = "base64:" + base64;
             }
 
-            res.set('subscription-userinfo', userinfoStr);
             res.set('profile-title', profileTitle);
-            if(announceHeader) res.set('announce', announceHeader);
+            res.set('profile-update-interval', '1');
+            res.set('subscription-userinfo', userinfoStr);
             res.set('profile-web-page-url', 'https://google.com');
-            if(supportUrl) res.set('support-url', supportUrl);
             res.set('providerid', 'yCUZsPnH');
             res.set('notification-subs-expire', '1');
             res.set('hide-settings', '1');
-            res.set('subscriptions-collapse', '0');
-            res.set('subscription-always-hwid-enable', '1');
-            res.set('profile-update-interval', '1');
-            res.set('subscription-auto-update-open-enable', '1');
-            res.set('server-address-resolve-enable', '1');
-            res.set('server-address-resolve-dns-domain', 'https://cloudflare-dns.com/dns-query');
-            res.set('server-address-resolve-dns-ip', '1.1.1.1');
             res.set('routing', routingLink);
+            if(supportUrl) res.set('support-url', supportUrl);
+            if(announceHeader) res.set('announce', announceHeader);
+            // الزام به فعال بودن HWID در اپ Happ
+            res.set('subscription-always-hwid-enable', '1');
+            // غیرفعال کردن قابلیت جمع شدن لیست سرورها (همیشه باز بودن لیست)
+            res.set('subscriptions-collapse', '0');
+            // فعال کردن آپدیت خودکار هنگام باز کردن اپ
+            res.set('subscription-auto-update-open-enable', '1');
 
             let prefixLines = [];
-            if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
             if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
-            if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
+            prefixLines.push(`#profile-update-interval: 1`);
             prefixLines.push(`#profile-web-page-url: https://google.com`);
-            if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
             prefixLines.push(`#providerid yCUZsPnH`);
             prefixLines.push(`#notification-subs-expire: 1`);
             prefixLines.push(`#hide-settings: 1`);
-            prefixLines.push(`#subscriptions-collapse: 0`);
-            prefixLines.push(`#subscription-always-hwid-enable: 1`);
-            prefixLines.push(`#profile-update-interval: 1`);
-            prefixLines.push(`#subscription-auto-update-open-enable: 1`);
-            prefixLines.push(`#server-address-resolve-enable: 1`);
-            prefixLines.push(`#server-address-resolve-dns-domain: https://cloudflare-dns.com/dns-query`);
-            prefixLines.push(`#server-address-resolve-dns-ip: 1.1.1.1`);
             prefixLines.push(routingLink);
+            if(supportUrl) prefixLines.push(`#support-url: ${supportUrl}`);
+            if(announceHeader) prefixLines.push(`#announce: ${announceHeader}`);
+            // تکرار پارامتر به‌صورت بدنه برای سازگاری بیشتر
+            prefixLines.push(`#subscription-always-hwid-enable: 1`);
+            prefixLines.push(`#subscriptions-collapse: 0`);
+            prefixLines.push(`#subscription-auto-update-open-enable: 1`);
+            if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
             const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
 
             res.set('content-type','text/plain; charset=utf-8');
