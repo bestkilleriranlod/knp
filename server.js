@@ -2041,11 +2041,6 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             res.set('subscriptions-collapse', '0');
             // فعال کردن آپدیت خودکار هنگام باز کردن اپ
             res.set('subscription-auto-update-open-enable', '1');
-            
-            // فعال کردن ریزالو دامنه سرورها با استفاده از DNS گوگل
-            res.set('server-address-resolve-enable', '1');
-            res.set('server-address-resolve-dns-domain', 'https://dns.google/dns-query');
-            res.set('server-address-resolve-dns-ip', '8.8.8.8');
 
             let prefixLines = [];
             if(profileTitle) prefixLines.push(`#profile-title: ${profileTitle}`);
@@ -2061,9 +2056,6 @@ app.get(/^\/sub\/.+/,async (req,res) =>
             prefixLines.push(`#subscription-always-hwid-enable: 1`);
             prefixLines.push(`#subscriptions-collapse: 0`);
             prefixLines.push(`#subscription-auto-update-open-enable: 1`);
-            prefixLines.push(`#server-address-resolve-enable: 1`);
-            prefixLines.push(`#server-address-resolve-dns-domain: https://dns.google/dns-query`);
-            prefixLines.push(`#server-address-resolve-dns-ip: 8.8.8.8`);
             if(userinfoStr) prefixLines.push(`#subscription-userinfo: ${userinfoStr}`);
             const responseBody = (prefixLines.length ? prefixLines.join('\n') + '\n' : '') + body;
 
